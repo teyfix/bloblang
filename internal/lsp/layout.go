@@ -206,7 +206,8 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 			d.brokenOnly = true
 		}
 		first, _ := edgeTokens(c, source)
-		if (list || block) && i > 0 && first != "}" && first != "]" && first != ")" {
+		elseIf := kind == "if_expr" && c.Kind() == "if_expr" && i > 0 && children[i-1].Kind() == "else"
+		if (list || block) && i > 0 && first != "}" && first != "]" && first != ")" && !elseIf {
 			d = nested(d, size)
 		}
 		parts = append(parts, d)
@@ -283,8 +284,15 @@ func callLayout(n *tree_sitter.Node, source []byte, size int) layout {
 		argumentIndent = 0
 	}
 	closing := soft("")
-	if hug || previous.Kind() == "lambda" && collection(previous.ChildByFieldName("body")) {
+	if hug {
 		closing = literal("")
+	}
+	if previous.Kind() == "lambda" {
+		switch previous.ChildByFieldName("body").Kind() {
+		case "object_literal", "array_literal", "if_expr", "match_expr":
+			// The body's closing delimiter also closes the lambda visually.
+			closing = literal("")
+		}
 	}
 	if previous.Kind() == "comment" {
 		closing = hardline()

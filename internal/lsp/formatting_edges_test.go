@@ -317,3 +317,73 @@ func TestFormattingHuggedArgumentWidths(t *testing.T) {
 		}
 	}
 }
+
+func TestFormattingBlockLambdaClosings(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"nested if", `root = this.data.
+  map_each(kv -> if kv.value.exists("results") {
+    kv.value.results
+  } else {
+    if kv.value.exists(kv.key) {
+      kv.value.get(kv.key)
+    } else {
+      kv.value
+    }
+  }
+  )`, `root = this.data.
+  map_each(kv -> if kv.value.exists("results") {
+    kv.value.results
+  } else {
+    if kv.value.exists(kv.key) {
+      kv.value.get(kv.key)
+    } else {
+      kv.value
+    }
+  })`},
+		{"else if", `root = this.data.map_each(kv -> if kv.value.exists("results") { kv.value.results } else if kv.value.exists(kv.key) { kv.value.get(kv.key) } else { kv.value })`, `root = this.data.
+  map_each(kv -> if kv.value.exists("results") {
+    kv.value.results
+  } else if kv.value.exists(kv.key) {
+    kv.value.get(kv.key)
+  } else {
+    kv.value
+  })`},
+		{"match and chained call", `root = this.data.map_each(kv -> match { kv.value.exists("results") => kv.value.results, _ => kv.value }).flatten()`, `root = this.data.
+  map_each(kv -> match {
+    kv.value.exists("results") => kv.value.results,
+    _ => kv.value
+  }).
+  flatten()`},
+		{"comment before closing block", `root = this.data.map_each(kv -> if kv.value.exists("results") {
+kv.value.results
+} else {
+kv.value # keep fallback
+})`, `root = this.data.
+  map_each(kv -> if kv.value.exists("results") {
+    kv.value.results
+  } else {
+    kv.value # keep fallback
+  })`},
+		{"comment after closing block", `root = this.data.map_each(kv -> if kv.value.exists("results") { kv.value.results } else { kv.value } # keep comment
+)`, `root = this.data.
+  map_each(kv -> if kv.value.exists("results") {
+    kv.value.results
+  } else {
+    kv.value
+  } # keep comment
+  )`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, uri := featureHandler(t)
+			_, err := h.benv.Parse(tc.input)
+			require.NoError(t, err)
+			for _, input := range []string{tc.input, tc.want} {
+				formatted, ok := h.formatText(uri, input, 2)
+				require.True(t, ok)
+				require.Equal(t, tc.want+"\n", formatted)
+				_, err := h.benv.Parse(formatted)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
