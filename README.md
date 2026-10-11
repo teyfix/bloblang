@@ -148,15 +148,17 @@ See the [generated rule reference](docs/features/lint-rules.md) for defaults and
 
 ### Formatting and previews
 
-Use **Format Document** in a Bloblang file or **Bloblang: Format Embedded Mappings** in YAML. The formatter preserves tokens, comments, string contents and explicit parentheses. It collapses short expression groups, expands longer groups, and verifies its output with Tree-sitter and Benthos before offering edits. Long method chains break after dots; lambda bodies can wrap independently while short calls such as `.join("; ")` stay together. YAML mappings preserve short scalar styles where valid; multiline output uses literal blocks. Formatting does not apply lint refactors.
+Use **Format Document** in a Bloblang file or **Bloblang: Format Embedded Mappings** in YAML. The formatter preserves comments, string contents and explicit parentheses; it removes trailing commas from single-line objects and arrays while preserving existing commas in multiline forms. It collapses short expression groups, expands longer groups, and verifies its output with Tree-sitter and Benthos before offering edits. Long method chains and chains containing multiline calls break after dots. Lambda bodies wrap independently while fitting arguments and lambda parameters stay together. Object and array arguments hug the call parentheses, including object-returning lambdas. YAML mappings preserve short scalar styles where valid; multiline output uses literal blocks. Formatting does not apply lint refactors.
 
 ```bloblang
-root = this.cast.map_each(c -> c.
-  with("character", "name").
-  values().
-  filter(cn -> cn.or("") != "").
-  join(" – ")
-).join("; ")
+root = this.cast.
+  map_each(c -> c.
+    with("character", "name").
+    values().
+    filter(cn -> cn.or("") != "").
+    join(" – ")
+  ).
+  join("; ")
 ```
 
 ![Formatting a Bloblang object in VS Code to fit the configured print width](docs/demos/formatting.gif)

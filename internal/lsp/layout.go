@@ -12,6 +12,7 @@ type layout struct {
 	text              string
 	parts             []layout
 	line, hard, group bool
+	brokenOnly        bool
 	indent            int
 }
 
@@ -22,6 +23,9 @@ func concat(ds ...layout) layout       { return layout{parts: ds} }
 func nested(d layout, size int) layout { return layout{parts: []layout{d}, indent: size} }
 func grouped(d layout) layout          { return layout{parts: []layout{d}, group: true} }
 func flatLayout(d layout) (string, bool) {
+	if d.brokenOnly {
+		return "", true
+	}
 	if d.hard {
 		return "", false
 	}
@@ -38,14 +42,38 @@ func flatLayout(d layout) (string, bool) {
 	}
 	return b.String(), true
 }
+
+// Reserve the following punctuation/text up to its first break opportunity.
+// In particular, a hugged object's fit must include the call's closing ')'.
+func layoutPrefixWidth(d layout) (int, bool) {
+	if d.line {
+		return 0, false
+	}
+	if d.parts == nil {
+		if i := strings.IndexByte(d.text, '\n'); i >= 0 {
+			return utf8.RuneCountInString(d.text[:i]), false
+		}
+		return utf8.RuneCountInString(d.text), true
+	}
+	width := 0
+	for _, p := range d.parts {
+		n, complete := layoutPrefixWidth(p)
+		width += n
+		if !complete {
+			return width, false
+		}
+	}
+	return width, true
+}
+
 func renderLayout(d layout, width int) string {
 	var b strings.Builder
 	column := 0
-	var render func(layout, int, bool)
-	render = func(d layout, indent int, flat bool) {
+	var render func(layout, int, bool, int)
+	render = func(d layout, indent int, flat bool, following int) {
 		indent += d.indent
 		if d.group && !flat {
-			if s, ok := flatLayout(d); ok && column+utf8.RuneCountInString(s) <= width {
+			if s, ok := flatLayout(d); ok && column+utf8.RuneCountInString(s)+following <= width {
 				b.WriteString(s)
 				column += utf8.RuneCountInString(s)
 				return
@@ -71,11 +99,21 @@ func renderLayout(d layout, width int) string {
 			}
 			return
 		}
-		for _, p := range d.parts {
-			render(p, indent, flat)
+		suffixes := make([]int, len(d.parts))
+		for i := len(d.parts) - 1; i >= 0; i-- {
+			suffixes[i] = following
+			prefix, complete := layoutPrefixWidth(d.parts[i])
+			if complete {
+				following += prefix
+			} else {
+				following = prefix
+			}
+		}
+		for i, p := range d.parts {
+			render(p, indent, flat, suffixes[i])
 		}
 	}
-	render(d, 0, false)
+	render(d, 0, false, 0)
 	return b.String()
 }
 func edgeTokens(n *tree_sitter.Node, source []byte) (string, string) {
@@ -126,7 +164,7 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 				separator = hardline()
 			} else if block && (last == "{" || first == "}" || benthosStatement(c.Kind()) || c.Kind() == "match_case") {
 				separator = hardline()
-			} else if list && last == "," {
+			} else if list && last == "," && first != "}" && first != "]" {
 				separator = soft(" ")
 			} else if list && (last == "{" || last == "[" || last == "(") {
 				flat := ""
@@ -164,6 +202,9 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 			}
 		}
 		d := nodeLayout(c, source, size)
+		if trailingCollectionComma(c) {
+			d.brokenOnly = true
+		}
 		first, _ := edgeTokens(c, source)
 		if (list || block) && i > 0 && first != "}" && first != "]" && first != ")" {
 			d = nested(d, size)
@@ -187,6 +228,8 @@ func callLayout(n *tree_sitter.Node, source []byte, size int) layout {
 	var args []layout
 	var previous *tree_sitter.Node
 	lambda := false
+	argumentCount := 0
+	var onlyArgument *tree_sitter.Node
 	inside := false
 	for i := uint(0); i < n.ChildCount(); i++ {
 		c := n.Child(i)
@@ -212,7 +255,18 @@ func callLayout(n *tree_sitter.Node, source []byte, size int) layout {
 			}
 		}
 		lambda = lambda || c.Kind() == "lambda"
-		args = append(args, nodeLayout(c, source, size))
+		if c.IsNamed() && c.Kind() != "comment" {
+			argumentCount++
+			onlyArgument = c
+		}
+		if c.Kind() == "lambda" && c.ChildCount() == 3 {
+			// Fit the preceding arguments and lambda parameter independently of
+			// the body, so a multiline body does not split a short call header.
+			args = append(args, literal(c.ChildByFieldName("param").Utf8Text(source)+" -> "))
+			args = []layout{grouped(concat(args...)), nodeLayout(c.ChildByFieldName("body"), source, size)}
+		} else {
+			args = append(args, nodeLayout(c, source, size))
+		}
 		previous = c
 	}
 	start := literal(name.Utf8Text(source) + "(")
@@ -221,13 +275,17 @@ func callLayout(n *tree_sitter.Node, source []byte, size int) layout {
 	}
 	opening := soft("")
 	argumentIndent := size
-	if lambda {
-		// Keep the lambda parameter beside the method; its body can break at
-		// method boundaries independently of the enclosing call.
+	hug := argumentCount == 1 && collection(onlyArgument) && previous == onlyArgument
+	if lambda || hug {
+		// Lambdas and sole collection arguments supply their own break points
+		// and indentation, keeping their opening beside the method name.
 		opening = literal("")
 		argumentIndent = 0
 	}
 	closing := soft("")
+	if hug || previous.Kind() == "lambda" && collection(previous.ChildByFieldName("body")) {
+		closing = literal("")
+	}
 	if previous.Kind() == "comment" {
 		closing = hardline()
 	}
@@ -242,19 +300,6 @@ func chainLayout(n *tree_sitter.Node, source []byte, size int) layout {
 		receiver = receiver.ChildByFieldName("object")
 	}
 	parts := []layout{nodeLayout(receiver, source, size)}
-	// A lambda already supplies useful break points inside its body. Keep the
-	// containing chain together so a trailing short call stays beside its ')'.
-	flexible := false
-	for _, call := range calls {
-		for i := uint(0); i < call.NamedChildCount(); i++ {
-			arg := call.NamedChild(i)
-			if arg.Kind() == "lambda" {
-				body := arg.ChildByFieldName("body")
-				flexible = flexible || body != nil && body.Kind() == "method_call" && body.ChildByFieldName("object").Kind() == "method_call"
-			}
-		}
-	}
-	continuation := false
 	for i := len(calls) - 1; i >= 0; i-- {
 		call := calls[i]
 		method := call.ChildByFieldName("method")
@@ -269,16 +314,10 @@ func chainLayout(n *tree_sitter.Node, source []byte, size int) layout {
 		}
 		if len(comments) > 0 {
 			parts = append(parts, nested(concat(comments...), size), nested(hardline(), size))
-			continuation = true
-		} else if !flexible {
+		} else {
 			parts = append(parts, nested(soft(""), size))
-			continuation = true
 		}
-		d := callLayout(call, source, size)
-		if continuation {
-			d = nested(d, size)
-		}
-		parts = append(parts, d)
+		parts = append(parts, nested(callLayout(call, source, size), size))
 	}
 	return grouped(concat(parts...))
 }

@@ -14,25 +14,60 @@ import (
 )
 
 type formatToken struct {
-	text       string
-	start, end uint
+	text                       string
+	start, end                 uint
+	trailingComma, inlineClose bool
+}
+
+func collection(n *tree_sitter.Node) bool {
+	return n != nil && (n.Kind() == "object_literal" || n.Kind() == "array_literal")
+}
+
+func trailingCollectionComma(n *tree_sitter.Node) bool {
+	if n.Kind() != "," || !collection(n.Parent()) {
+		return false
+	}
+	next := n.NextSibling()
+	for next != nil && next.Kind() == "comment" {
+		next = next.NextSibling()
+	}
+	return next != nil && (next.Kind() == "}" || next.Kind() == "]")
 }
 
 func tokens(n *tree_sitter.Node, source []byte, out *[]formatToken) {
 	switch n.Kind() {
 	case "string", "comment", "number":
-		*out = append(*out, formatToken{n.Utf8Text(source), n.StartByte(), n.EndByte()})
+		*out = append(*out, formatToken{text: n.Utf8Text(source), start: n.StartByte(), end: n.EndByte()})
 		return
 	}
 	if n.ChildCount() == 0 {
 		if n.EndByte() > n.StartByte() {
-			*out = append(*out, formatToken{n.Utf8Text(source), n.StartByte(), n.EndByte()})
+			parent := n.Parent()
+			inlineClose := (n.Kind() == "}" || n.Kind() == "]") && collection(parent) && parent.StartPosition().Row == parent.EndPosition().Row
+			*out = append(*out, formatToken{text: n.Utf8Text(source), start: n.StartByte(), end: n.EndByte(), trailingComma: trailingCollectionComma(n), inlineClose: inlineClose})
 		}
 		return
 	}
 	for i := uint(0); i < n.ChildCount(); i++ {
 		tokens(n.Child(i), source, out)
 	}
+}
+
+// Only a trailing collection comma immediately before a single-line closing
+// delimiter may disappear. All other tokens, including comments, must match.
+func equivalentFormatTokens(before, after []formatToken) bool {
+	j := 0
+	for _, token := range before {
+		if j == len(after) {
+			return false
+		}
+		if token.text == after[j].text {
+			j++
+		} else if !token.trailingComma || !after[j].inlineClose {
+			return false
+		}
+	}
+	return j == len(after)
 }
 func (h *Handler) formatText(uri protocol.DocumentURI, text string, tabSize int) (string, bool) {
 	preview, err := benthos.PreviewEnvironment(h.benv, h.getSample(uri))
@@ -87,13 +122,8 @@ func (h *Handler) formatText(uri protocol.DocumentURI, text string, tabSize int)
 	if hasError {
 		return text, false
 	}
-	if len(ts) != len(formattedTokens) {
+	if !equivalentFormatTokens(ts, formattedTokens) {
 		return text, false
-	}
-	for i := range ts {
-		if ts[i].text != formattedTokens[i].text {
-			return text, false
-		}
 	}
 	// Reparse the formatted result before returning an edit.
 	if _, err := env.Parse(result); err != nil && originalErr == nil {

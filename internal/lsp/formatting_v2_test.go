@@ -95,16 +95,17 @@ root = this.apply("embed_input")
 	formatted, ok := h.formatText(uri, text, 2)
 	require.True(t, ok)
 	t.Log(formatted)
-	require.Contains(t, formatted, `).join("; ")`)
 	require.Contains(t, formatted, `join(" – ")`)
-	require.Contains(t, formatted, `      $movie.credits.cast.slice(0, 10).
+	require.Contains(t, formatted, `      $movie.credits.cast.
+        slice(0, 10).
         # character can be null
         map_each(c -> c.
           with("character", "name").
           values().
           filter(cn -> cn.or("") != "").
           join(" – ")
-        ).join("; "),`)
+        ).
+        join("; "),`)
 	require.Contains(t, formatted, "#!sample_from custom_sample.json\n\nmap")
 	twice, ok := h.formatText(uri, formatted, 2)
 	require.True(t, ok)
