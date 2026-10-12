@@ -197,6 +197,21 @@ func TestFormattingOpinionatedCases(t *testing.T) {
     )
   ).
   flatten()`},
+		{"binary lambda continuation", `let forbid = ["array", "object"]
+
+root.title = this.data.
+  key_values().
+  filter(kv -> !$forbid.contains(kv.value.type()) &&
+  !kv.value.any(item -> $forbid.contains(item.type()))
+  ).
+  fold({}, item -> item.tally.assign({ item.value.key: item.value.value }))`, `let forbid = ["array", "object"]
+
+root.title = this.data.
+  key_values().
+  filter(kv -> !$forbid.contains(kv.value.type()) &&
+    !kv.value.any(item -> $forbid.contains(item.type()))
+  ).
+  fold({}, item -> item.tally.assign({ item.value.key: item.value.value }))`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

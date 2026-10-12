@@ -149,6 +149,7 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 	block := kind == "statement_block" || kind == "map_declaration" || kind == "match_expr" || kind == "if_expr"
 	var parts []layout
 	for i, c := range children {
+		binaryRight := kind == "binary_expr" && c.Id() == n.ChildByFieldName("right").Id()
 		if i > 0 {
 			prev := children[i-1]
 			_, last := edgeTokens(prev, source)
@@ -178,7 +179,7 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 					flat = " "
 				}
 				separator = soft(flat)
-			} else if kind == "binary_expr" && i == 2 {
+			} else if binaryRight {
 				separator = soft(" ")
 			} else if kind == "unary_expr" {
 				separator = literal("")
@@ -195,7 +196,7 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 			// Closing delimiters align with the group; interiors indent after opening.
 			if (list || block) && (first == "}" || first == "]" || first == ")") {
 				parts = append(parts, separator)
-			} else if list || block {
+			} else if list || block || binaryRight {
 				parts = append(parts, nested(separator, size))
 			} else {
 				parts = append(parts, separator)
@@ -207,7 +208,9 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 		}
 		first, _ := edgeTokens(c, source)
 		elseIf := kind == "if_expr" && c.Kind() == "if_expr" && i > 0 && children[i-1].Kind() == "else"
-		if (list || block) && i > 0 && first != "}" && first != "]" && first != ")" && !elseIf {
+		// A wrapped binary RHS continues one level below its left operand,
+		// including any further breaks inside that RHS.
+		if binaryRight || ((list || block) && i > 0 && first != "}" && first != "]" && first != ")" && !elseIf) {
 			d = nested(d, size)
 		}
 		parts = append(parts, d)
