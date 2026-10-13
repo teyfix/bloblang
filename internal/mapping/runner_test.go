@@ -34,11 +34,20 @@ func TestRunMessageSemantics(t *testing.T) {
 			require.NoError(t, err)
 			assert.JSONEq(t, tt.output, string(encoded))
 			assert.Equal(t, tt.deleted, result.Deleted)
+			if tt.name == "payload JSON" {
+				assert.Equal(t, &RawOutput{Encoding: "utf8", Data: `{"value":42}`}, result.RawOutput)
+			}
 			if tt.name == "metadata" {
 				assert.Equal(t, map[string]any{"copied": "x"}, result.Metadata)
 			}
 		})
 	}
+}
+
+func TestRunBinaryOutput(t *testing.T) {
+	result := Run(Request{Source: `root = "/w==".decode("base64")`, Input: json.RawMessage(`null`)})
+	require.Nil(t, result.Error, "%+v", result.Error)
+	assert.Equal(t, &RawOutput{Encoding: "base64", Data: "/w=="}, result.RawOutput)
 }
 
 func TestRunEnvironmentAndImports(t *testing.T) {
