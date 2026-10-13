@@ -30,7 +30,7 @@ func Execute(ctx context.Context, request Request) Result {
 }
 
 func workerError(kind, message string) Result {
-	return Result{Error: &Error{Kind: kind, Message: message}}
+	return Result{Metadata: map[string]any{}, Error: &Error{Kind: kind, Message: message}}
 }
 
 type boundedBuffer struct {
@@ -97,6 +97,7 @@ func ServeWorker(input io.Reader, output io.Writer) int {
 	} else {
 		var request Request
 		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&request); err != nil {
 			result = workerError("input", err.Error())

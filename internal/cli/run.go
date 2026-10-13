@@ -12,12 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teyfix/bloblang-lsp/internal/evaluation"
 	"github.com/teyfix/bloblang-lsp/internal/mapping"
 )
 
 // Kept injectable for command tests; production always uses the subprocess
 // runner, which enforces a hard execution deadline.
-var executeMapping = mapping.Execute
+var executeMapping = evaluation.Run
 
 type importFiles []string
 
@@ -141,7 +142,7 @@ func runMappingCommand(ctx context.Context, args []string, stdin io.Reader, stdo
 	if err := json.NewEncoder(stdout).Encode(result); err != nil {
 		return fail(stderr, err)
 	}
-	if result.Error != nil {
+	if result.Error != nil || result.LintError != nil {
 		return 1
 	}
 	return 0
