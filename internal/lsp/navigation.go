@@ -279,7 +279,7 @@ func (h *Handler) References(ctx context.Context, p *protocol.ReferenceParams) (
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	units, index, selected := h.renameTarget(p.TextDocumentPositionParams)
+	units, index, selected := h.navigationTarget(p.TextDocumentPositionParams, true)
 	defer closeRenameUnits(units)
 	if selected == nil {
 		text, err := h.navigationText(p.TextDocument.URI)
@@ -342,7 +342,7 @@ func (h *Handler) References(ctx context.Context, p *protocol.ReferenceParams) (
 			continue
 		}
 		func() {
-			other := h.renameUnits(uri, text)
+			other := h.navigationUnits(uri, text, true)
 			defer closeRenameUnits(other)
 			for _, unit := range other {
 				for _, candidate := range unit.symbols {
@@ -418,7 +418,7 @@ func (h *Handler) fileReferences(ctx context.Context, target protocol.DocumentUR
 			}
 		}
 		func() {
-			units := h.renameUnits(uri, text)
+			units := h.navigationUnits(uri, text, true)
 			defer closeRenameUnits(units)
 			for _, unit := range units {
 				if unit.tree == nil {

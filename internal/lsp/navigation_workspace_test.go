@@ -92,3 +92,13 @@ func TestReferencesRepeatedLetBindingsAndCancellation(t *testing.T) {
 	_, err = h.References(ctx, params)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestReferencesWhileDocumentIsIncomplete(t *testing.T) {
+	h, uri := featureHandler(t)
+	text := "let value = 1\nroot.a = $value\nroot.b = ("
+	openFeature(t, h, uri, text)
+	params := &protocol.ReferenceParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Position: bytePosition(text, strings.Index(text, "$value"))}, Context: protocol.ReferenceContext{IncludeDeclaration: true}}
+	refs, err := h.References(context.Background(), params)
+	require.NoError(t, err)
+	require.Len(t, refs, 2)
+}
