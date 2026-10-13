@@ -15,6 +15,7 @@ type embeddedRegion struct {
 	text              string
 	offsets           []int
 	start, end        int
+	scalarStart       int // First content byte or quote/block indicator, after YAML properties.
 	style             yaml.Style
 	indent            int
 	interpolation     bool
@@ -70,7 +71,7 @@ func extractRegions(uri protocol.DocumentURI, text string) []embeddedRegion {
 				if _, external := externalMapping(decoded); external {
 					return
 				}
-				out = append(out, embeddedRegion{text: decoded, offsets: offsets, start: start, end: end, style: n.Style, indent: n.Column - 1})
+				out = append(out, embeddedRegion{text: decoded, offsets: offsets, start: start, end: end, scalarStart: scalarContentStart(n, text, starts, lines), style: n.Style, indent: n.Column - 1})
 				return
 			}
 			for _, span := range interpolationSpans(decoded) {
@@ -109,9 +110,47 @@ func extractRegions(uri protocol.DocumentURI, text string) []embeddedRegion {
 	}
 	return out
 }
+
+// scalarContentStart skips YAML node properties. Node.Column identifies the first
+// property when an anchor or explicit tag precedes a scalar, even when the scalar
+// itself starts on a later line. The input has already been parsed as valid YAML.
+func scalarContentStart(n *yaml.Node, text string, starts []int, lines []string) int {
+	i := starts[n.Line-1] + runeColumnByte(lines[n.Line-1], n.Column-1)
+	for i < len(text) && (text[i] == '&' || text[i] == '!') {
+		if text[i] == '!' && i+1 < len(text) && text[i+1] == '<' {
+			// Verbatim tags can contain punctuation that otherwise delimits YAML.
+			i += 2
+			for i < len(text) && text[i] != '>' {
+				i++
+			}
+			if i < len(text) {
+				i++
+			}
+		} else {
+			for i < len(text) && !spaceByte(text[i]) {
+				i++
+			}
+		}
+		for i < len(text) {
+			if spaceByte(text[i]) {
+				i++
+				continue
+			}
+			if text[i] == '#' {
+				for i < len(text) && text[i] != '\n' {
+					i++
+				}
+				continue
+			}
+			break
+		}
+	}
+	return i
+}
+
 func scalarSource(n *yaml.Node, text string, starts []int, lines []string) (string, []int, int) {
-	row := n.Line - 1
-	start := starts[row] + runeColumnByte(lines[row], n.Column-1)
+	start := scalarContentStart(n, text, starts, lines)
+	row := sort.Search(len(starts), func(i int) bool { return starts[i] > start }) - 1
 	var decoded strings.Builder
 	var positions []int
 	appendPart := func(s string, offset int) {
@@ -123,6 +162,15 @@ func scalarSource(n *yaml.Node, text string, starts []int, lines []string) (stri
 	if n.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
 		last := row + 1
 		indent := -1
+		leading := 0
+		hasContent := false
+		for _, line := range strings.Split(n.Value, "\n") {
+			if strings.TrimSpace(line) != "" {
+				leading = len(line) - len(strings.TrimLeft(line, " "))
+				hasContent = true
+				break
+			}
+		}
 		for last < len(lines) {
 			line := lines[last]
 			if strings.TrimSpace(line) == "" {
@@ -130,11 +178,14 @@ func scalarSource(n *yaml.Node, text string, starts []int, lines []string) (stri
 				continue
 			}
 			spaces := len(line) - len(strings.TrimLeft(line, " "))
-			if spaces <= len(lines[row])-len(strings.TrimLeft(lines[row], " ")) || (indent >= 0 && spaces < indent) {
+			if !hasContent || (indent >= 0 && spaces < indent) {
 				break
 			}
 			if indent < 0 {
-				indent = spaces
+				// The header may be on its own line at the same indentation as
+				// the content. YAML's decoded leading spaces also account for an
+				// explicit indentation indicator such as |2.
+				indent = max(0, spaces-leading)
 			}
 			last++
 		}
@@ -142,7 +193,7 @@ func scalarSource(n *yaml.Node, text string, starts []int, lines []string) (stri
 			indent = n.Column + 1
 		}
 		for r := row + 1; r < last; r++ {
-			line := lines[r]
+			line := strings.TrimSuffix(lines[r], "\r")
 			col := indent
 			if col > len(line) {
 				col = len(line)
