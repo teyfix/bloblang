@@ -14,9 +14,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang-lsp/internal/evaluation"
 	"github.com/teyfix/bloblang-lsp/internal/lsp"
 	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang-lsp/internal/mcpserver"
 )
 
 type BuildInfo struct {
@@ -46,6 +49,22 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runTestCommand(ctx, args[1:], stdin, stdout, stderr)
 	case "schema":
 		return runSchemaCommand(ctx, args[1:], stdin, stdout, stderr)
+	case "mcp":
+		if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
+			_, err := fmt.Fprintln(stdout, "Usage: blobl mcp\nServe local Bloblang tools over MCP on stdin/stdout.")
+			if err != nil {
+				return fail(stderr, err)
+			}
+			return 0
+		}
+		if len(args) != 1 {
+			return fail(stderr, errors.New("mcp accepts no arguments"))
+		}
+		server := mcpserver.New(build.version(), mcpserver.Options{Run: func(ctx context.Context, req mapping.Request) (any, error) { return evaluation.Run(ctx, req), nil }})
+		if err := server.Run(ctx, &mcp.IOTransport{Reader: io.NopCloser(stdin), Writer: borrowedWriter{stdout}}); err != nil {
+			return fail(stderr, err)
+		}
+		return 0
 	case "--version", "-version", "version":
 		if len(args) != 1 {
 			return fail(stderr, errors.New("version accepts no arguments"))
@@ -104,6 +123,7 @@ Commands:
   run    Evaluate a mapping and report static diagnostics
   test   Run named mapping fixtures and assertions
   schema Summarize a JSON/YAML sample as JSON Type Definition
+  mcp    Serve local tools to agents over MCP stdin/stdout
 
 Use blobl <command> --help for command options, or blobl --version.
 `)
@@ -112,6 +132,11 @@ Use blobl <command> --help for command options, or blobl --version.
 	}
 	return 0
 }
+
+// Run borrows caller-owned streams, including when MCP closes its transport.
+type borrowedWriter struct{ io.Writer }
+
+func (borrowedWriter) Close() error { return nil }
 
 func fail(stderr io.Writer, err error) int {
 	_, _ = fmt.Fprintf(stderr, "blobl: %v\n", err)

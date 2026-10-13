@@ -7,7 +7,9 @@ require (
 	github.com/bombsimon/jtd-infer-go v1.0.1
 	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/dustin/go-humanize v1.0.1
+	github.com/google/jsonschema-go v0.4.3
 	github.com/jsontypedef/json-typedef-go v0.0.0-20200503043955-4280071bd745
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/owenrumney/go-lsp v0.2.5
 	github.com/redpanda-data/benthos/v4 v4.73.0
 	github.com/redpanda-data/connect/v4 v4.92.0
@@ -16,6 +18,7 @@ require (
 	github.com/teyfix/tree-sitter-bloblang v0.1.6-0.20261002030930-e9c31637f64d
 	github.com/tree-sitter/go-tree-sitter v0.25.0
 	go.yaml.in/yaml/v3 v3.0.4
+	golang.org/x/sys v0.43.0
 )
 
 require (
@@ -89,7 +92,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
-	github.com/modelcontextprotocol/go-sdk v1.8.0 // indirect
 	github.com/nsf/jsondiff v0.0.0-20260207060731-8e8d90c4c0ac // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/parquet-go/bitpack v1.0.0 // indirect
@@ -110,6 +112,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
+	github.com/segmentio/asm v1.2.1 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
@@ -132,6 +136,7 @@ require (
 	github.com/xitongsys/parquet-go v1.6.2 // indirect
 	github.com/xitongsys/parquet-go-source v0.0.0-20241021075129-b732d2ac9c9b // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	gitlab.com/golang-commonmark/html v0.0.0-20191124015941-a22733972181 // indirect
 	gitlab.com/golang-commonmark/linkify v0.0.0-20200225224916-64bca66f6ad3 // indirect
@@ -147,8 +152,8 @@ require (
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
