@@ -23,17 +23,20 @@ import (
 // LSP document, reading samples, or executing Bloblang functions and methods.
 // A Tooling instance may be reused for multiple files. Calls are serialized.
 type Tooling struct {
-	mu sync.Mutex
-	h  *Handler
+	mu      sync.Mutex
+	h       *Handler
+	imports map[string]string
 }
 
 // ToolDiagnostic uses one-based lines and Unicode character columns.
 type ToolDiagnostic struct {
-	Line     int    `json:"line"`
-	Column   int    `json:"column"`
-	Severity string `json:"severity"`
-	Code     string `json:"code,omitempty"`
-	Message  string `json:"message"`
+	Line      int    `json:"line"`
+	Column    int    `json:"column"`
+	EndLine   int    `json:"endLine"`
+	EndColumn int    `json:"endColumn"`
+	Severity  string `json:"severity"`
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message"`
 }
 
 type LintResult struct {
@@ -42,11 +45,24 @@ type LintResult struct {
 }
 
 func NewTooling() (*Tooling, error) {
+	return NewToolingWithImports(nil)
+}
+
+// NewToolingWithImports uses supplied import sources when imports is non-nil.
+// An empty map explicitly disables filesystem import lookup for inline tools.
+func NewToolingWithImports(imports map[string]string) (*Tooling, error) {
 	parser, err := benthos.NewBloblang()
 	if err != nil {
 		return nil, err
 	}
-	return &Tooling{h: &Handler{parser: parser, benv: benthos.NewEnvironment().Deactivated()}}, nil
+	var copied map[string]string
+	if imports != nil {
+		copied = make(map[string]string, len(imports))
+		for name, source := range imports {
+			copied[name] = source
+		}
+	}
+	return &Tooling{h: &Handler{parser: parser, benv: benthos.NewEnvironment().Deactivated()}, imports: copied}, nil
 }
 
 // Close releases retained syntax trees. It is safe to call more than once.
@@ -104,6 +120,12 @@ func toolingYAML(text string) error {
 func (t *Tooling) environment(uri protocol.DocumentURI) *bloblang.Environment {
 	source := editorconfig.SourceContext{Dir: t.h.baseDirForURI(uri)}
 	return t.h.benv.WithCustomImporter(func(name string) ([]byte, error) {
+		if t.imports != nil {
+			if source, ok := t.imports[name]; ok {
+				return []byte(source), nil
+			}
+			return nil, fmt.Errorf("import %q was not supplied in imports", name)
+		}
 		return os.ReadFile(source.ImportPath(name))
 	})
 }
@@ -276,7 +298,9 @@ func (t *Tooling) Lint(path, text string, fix bool) (LintResult, error) {
 		_ = json.Unmarshal(diagnostic.Code, &code)
 		start := positionByte(text, diagnostic.Range.Start)
 		lineStart := strings.LastIndex(text[:start], "\n") + 1
-		result.Diagnostics = append(result.Diagnostics, ToolDiagnostic{Line: diagnostic.Range.Start.Line + 1, Column: utf8.RuneCountInString(text[lineStart:start]) + 1, Severity: severity, Code: code, Message: diagnostic.Message})
+		end := positionByte(text, diagnostic.Range.End)
+		endLineStart := strings.LastIndex(text[:end], "\n") + 1
+		result.Diagnostics = append(result.Diagnostics, ToolDiagnostic{Line: diagnostic.Range.Start.Line + 1, Column: utf8.RuneCountInString(text[lineStart:start]) + 1, EndLine: diagnostic.Range.End.Line + 1, EndColumn: utf8.RuneCountInString(text[endLineStart:end]) + 1, Severity: severity, Code: code, Message: diagnostic.Message})
 	}
 	sort.SliceStable(result.Diagnostics, func(i, j int) bool {
 		a, b := result.Diagnostics[i], result.Diagnostics[j]
