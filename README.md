@@ -1,6 +1,15 @@
-# Bloblang Language Server
+# Bloblang developer tools
 
-Bloblang tooling for standalone mappings and mappings embedded in Redpanda Connect YAML. The `blobl` CLI provides `lsp`, `lint` and `fmt` commands using the same analysis and formatting as the language server. Diagnostics, completion, hover previews and navigation are available to LSP clients. The [VS Code extension](https://github.com/teyfix/vscode-bloblang) supplies editor integration and highlighting, installs the latest `blobl` release, and uses it for the language server and integrated terminal commands.
+Bloblang tooling for standalone mappings and mappings embedded in Redpanda Connect YAML. The `blobl` CLI provides `lsp`, `lint`, `fmt`, `run`, `test`, `schema` and `mcp` commands. Evaluate a mapping against a sample without starting a pipeline, inspect its diagnostics, or expose the same tools to an agent. The [VS Code extension](https://github.com/teyfix/vscode-bloblang) supplies editor integration and highlighting, installs the latest `blobl` release, and uses it for the language server and integrated terminal commands.
+
+```sh
+blobl run --input-file response.json mapping.blobl
+blobl test suite.yaml
+blobl schema --input-file response.json
+blobl mcp
+```
+
+The [MCP server](docs/mcp.md) supports file-based evaluation, linting, formatting, sample schemas and batched documentation search with per-result match evidence. Search is lexical and fuzzy; it does not require an embedding model. [Schema summaries](docs/features/schema.md) use the existing Go `jtd-infer-go` library and JSON Type Definition, with enums disabled. See [evaluation and fixtures](docs/features/evaluation.md) for execution semantics and limits.
 
 ![Typing a Bloblang mapping in VS Code with live highlighting and completion](docs/demos/typing.gif)
 

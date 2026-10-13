@@ -1,6 +1,8 @@
 # blobl CLI
 
-`blobl` provides static linting, formatting and the Bloblang language server. Standalone Bloblang files and embedded mappings in Redpanda Connect YAML use the same analysis and formatter as the editor. Run `blobl --help` or a subcommand's `--help` for available options; `blobl --version` reports the build version. With no arguments, `blobl` prints help. Put options before input paths.
+`blobl` provides linting, formatting, standalone evaluation, fixture tests, sample schemas, an MCP server and the Bloblang language server. Standalone Bloblang files and embedded mappings in Redpanda Connect YAML use the same analysis and formatter as the editor. Run `blobl --help` or a subcommand's `--help` for available options; `blobl --version` reports the build version. With no arguments, `blobl` prints help. Put options before input paths.
+
+See [run and test](features/evaluation.md), [schema](features/schema.md), and [MCP](mcp.md) for those commands. The formatting/lint exit status table below applies to `fmt` and `lint`.
 
 ## Installation
 
