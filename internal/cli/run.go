@@ -50,7 +50,7 @@ func runMappingCommand(ctx context.Context, args []string, stdin io.Reader, stdo
 	fs.DurationVar(&timeout, "timeout", mapping.DefaultTimeout, "Execution deadline, up to 5s")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return printMappingHelp(fs, stdout, stderr, "Usage: blobl run [options] [mapping.blobl|-]\nWith a mapping path, sample directives, sibling .sample.json/.yaml files and relative imports work as in the LSP.\nInput is required, either explicitly or from a sample. Host I/O functions are disabled; inline source requires explicit imports.\nJSON output contains output, metadata, deleted, optional rawOutput and structured error.\n")
+			return printMappingHelp(fs, stdout, stderr, "Usage: blobl run [options] [mapping.blobl|-]\nWith a mapping path, sample directives and sibling .sample.json/.yaml files work as in the LSP; relative imports are snapshotted before execution.\nInput is required, either explicitly or from a sample. Host I/O functions are disabled; inline source requires explicit imports.\nJSON output contains output, metadata, deleted, diagnostics, optional rawOutput and structured error/lintError.\nExit 1 reports execution or lint setup failure.\n")
 		}
 		return fail(stderr, err)
 	}
