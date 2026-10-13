@@ -3,10 +3,12 @@ package mapping
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"unicode/utf8"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
@@ -43,10 +45,20 @@ type Error struct {
 // has Output null and Deleted true; an ordinary JSON null has Deleted false.
 // Errors never expose partial output. Metadata is empty for deleted messages.
 type Result struct {
-	Output   any            `json:"output"`
-	Metadata map[string]any `json:"metadata"`
-	Deleted  bool           `json:"deleted"`
-	Error    *Error         `json:"error,omitempty"`
+	Output    any            `json:"output"`
+	Metadata  map[string]any `json:"metadata"`
+	Deleted   bool           `json:"deleted"`
+	Error     *Error         `json:"error,omitempty"`
+	RawOutput *RawOutput     `json:"rawOutput,omitempty"`
+}
+
+// RawOutput preserves message bytes when the runtime does not retain a
+// structured value. Encoding is utf8 or base64. This includes root strings,
+// bytes, and null: the public message API cannot distinguish the original
+// Bloblang types of the string "null" and a null value after execution.
+type RawOutput struct {
+	Encoding string `json:"encoding"`
+	Data     string `json:"data"`
 }
 
 func failed(kind string, err error) Result {
@@ -88,7 +100,7 @@ func Run(req Request) Result {
 		return failed("input", fmt.Errorf("metadata: %w", err))
 	}
 	meta, _ := metaValue.(map[string]any)
-	env := benthos.NewEnvironment().OnlyPure().WithoutFunctions("env").WithCustomImporter(func(name string) ([]byte, error) {
+	env := benthos.NewEnvironment().OnlyPure().WithoutFunctions("env").WithMaxMapRecursion(100).WithCustomImporter(func(name string) ([]byte, error) {
 		source, ok := req.Imports[name]
 		if !ok {
 			return nil, fmt.Errorf("import %q was not supplied in imports", name)
@@ -142,6 +154,17 @@ func Run(req Request) Result {
 	result := Result{Metadata: map[string]any{}, Deleted: out == nil}
 	if out == nil {
 		return result
+	}
+	if !out.HasStructured() {
+		raw, err := out.AsBytes()
+		if err != nil {
+			return failed("output", err)
+		}
+		result.RawOutput = &RawOutput{Encoding: "utf8", Data: string(raw)}
+		if !utf8.Valid(raw) {
+			result.RawOutput.Encoding = "base64"
+			result.RawOutput.Data = base64.StdEncoding.EncodeToString(raw)
+		}
 	}
 	result.Output, err = out.AsStructured()
 	if err != nil {
