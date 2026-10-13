@@ -181,6 +181,32 @@ func snapshotImports(req *Request, baseDir string) error {
 	return nil
 }
 
+// SnapshotImports prepares imports for static lint/format requests that do not
+// have execution input. Source is already loaded by the caller. A nonempty
+// mappingPath provides the source's filesystem context; an empty path permits
+// only supplied imports. Returned entries are owned by the caller and bounded
+// together with source to the same request-size limit as mapping execution.
+// Syntax errors are left to the caller's normal formatter/linter diagnostics.
+func SnapshotImports(source, mappingPath string, supplied map[string]string) (map[string]string, error) {
+	req := Request{Source: source, Imports: make(map[string]string, len(supplied))}
+	for name, contents := range supplied {
+		req.Imports[name] = contents
+	}
+	if mappingPath != "" {
+		path, err := filepath.Abs(mappingPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := snapshotImports(&req, filepath.Dir(path)); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := requestSize(req); err != nil {
+		return nil, err
+	}
+	return req.Imports, nil
+}
+
 func requestSize(req Request) (int, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -193,11 +219,30 @@ func requestSize(req Request) (int, error) {
 }
 
 func readRequestFile(path string) ([]byte, error) {
+	// Stat before opening so pipes and devices cannot block request handling.
+	// Recheck the opened descriptor in case the path changed in between.
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("file %q is not a regular file", path)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("file %q is not a regular file", path)
+	}
+	if info.Size() > MaxRequestBytes {
+		return nil, fmt.Errorf("file %q exceeds maximum request size of %d bytes", path, MaxRequestBytes)
+	}
 	data, err := io.ReadAll(io.LimitReader(file, MaxRequestBytes+1))
 	if err != nil {
 		return nil, err
