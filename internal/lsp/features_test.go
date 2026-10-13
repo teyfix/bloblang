@@ -48,7 +48,7 @@ func TestSampledExpressionHoverAndMetadata(t *testing.T) {
 		require.NotNil(t, v, needle)
 		require.Contains(t, v.Contents.Value(), want, needle)
 	}
-	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}})
+	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Range: protocol.Range{End: protocol.Position{Line: 10000}}})
 	require.NoError(t, err)
 	var values []string
 	for _, v := range hints {
@@ -106,7 +106,7 @@ func TestMapNavigationAndForwardDefinition(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, locations, 1)
 	require.Equal(t, 2, locations[0].Range.Start.Line)
-	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}})
+	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Range: protocol.Range{End: protocol.Position{Line: 10000}}})
 	require.NoError(t, err)
 	require.NotEmpty(t, hints)
 	require.Contains(t, string(hints[len(hints)-1].Label), "ADA")

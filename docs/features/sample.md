@@ -1,6 +1,6 @@
 # Samples and runtime previews
 
-[`internal/benthos/sample.go`](../../internal/benthos/sample.go) extracts samples, and [`executor.go`](../../internal/benthos/executor.go) evaluates complete statement prefixes or selected expressions through the public Benthos runtime. Each evaluation starts from a fresh input and optional root target; the server does not simulate processor pipelines or cache cumulative execution results.
+[`internal/benthos/sample.go`](../../internal/benthos/sample.go) extracts samples, and [`executor.go`](../../internal/benthos/executor.go) evaluates complete statement prefixes or selected expressions through the public Benthos runtime. Each uncached evaluation starts from a fresh input and optional root target. The server reuses bounded results for identical statement prefixes and fixtures until an edit, dependency change or cache expiry; it does not simulate processor pipelines. Before and after previews share the same cached prefix result, but generating all distinct prefixes still replays the mapping from its input.
 
 For `mapping.blobl`, automatic discovery looks for `mapping.sample.json`, `.yaml`, or `.yml`. File samples require the `$bloblang` envelope:
 
@@ -42,6 +42,8 @@ Multiple candidates at an automatically selected sibling level are ambiguous; us
 File-watch notifications reload samples for open documents, including file creation, modification, and deletion. Valid samples enable before/after assignment inlays, input/output lenses for truncated values, sample-file navigation lenses, and supported value hovers. See the [README](../../README.md#samples) for directive examples and [hover rendering](hover.md) for preview configuration.
 
 ## Environment fixtures
+
+Sample files must be regular files no larger than 4 MiB. The same limit applies to sibling samples and all file-backed sample directives.
 
 IDE validation and execution replace `env(name)` in a private Benthos environment. Whole-sample `env` overrides take precedence; unspecified names return an empty string. Neither path reads or mutates the server's process environment. Imported mappings and dynamic environment names use the same resolver.
 

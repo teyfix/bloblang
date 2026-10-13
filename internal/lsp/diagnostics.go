@@ -14,8 +14,15 @@ import (
 )
 
 func (h *Handler) validateDocument(ctx context.Context, uri protocol.DocumentURI, version uint64) {
+	defer h.discardClosedDocumentTrees(uri)
+	if ctx.Err() != nil {
+		return
+	}
+	h.mu.Lock()
 	text, ok := h.documents.Text(uri)
-	if !ok {
+	current := h.latestVersion[uri]
+	h.mu.Unlock()
+	if !ok || current != version {
 		return
 	}
 
@@ -24,7 +31,10 @@ func (h *Handler) validateDocument(ctx context.Context, uri protocol.DocumentURI
 		diagnostics = h.yamlPathDiagnostics(uri, text)
 		seenMissing := false
 		for _, r := range h.regions(uri) {
-			for _, d := range h.diagnosticsText(r.uri, r.text) {
+			if ctx.Err() != nil {
+				return
+			}
+			for _, d := range h.diagnosticsTextContext(ctx, r.uri, r.text) {
 				if strings.Contains(d.Message, "not found; add one") {
 					if seenMissing {
 						continue
@@ -36,17 +46,18 @@ func (h *Handler) validateDocument(ctx context.Context, uri protocol.DocumentURI
 			}
 		}
 	} else {
-		diagnostics = h.diagnosticsText(uri, text)
+		diagnostics = h.diagnosticsTextContext(ctx, uri, text)
 	}
 
 	h.mu.Lock()
 	currentVersion, ok := h.latestVersion[uri]
-	h.mu.Unlock()
-	if !ok || version != currentVersion {
+	if !ok || version != currentVersion || ctx.Err() != nil || h.stopped {
+		h.mu.Unlock()
 		return // Stale validation run or document was closed!
 	}
 
-	h.publishDiagnostics(ctx, uri, diagnostics)
+	h.publishDiagnostics(ctx, uri, diagnostics, version)
+	h.mu.Unlock()
 	if h.validationHook != nil {
 		h.validationHook(uri, diagnostics)
 	}
@@ -133,7 +144,7 @@ func convertErrorToDiagnostics(text string, err error) []protocol.Diagnostic {
 	}}
 }
 
-func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []protocol.Diagnostic) {
+func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []protocol.Diagnostic, generation ...uint64) {
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
 	}
@@ -150,9 +161,7 @@ func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentU
 	if h.client == nil {
 		return
 	}
-	if err := h.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{URI: uri, Diagnostics: merged}); err != nil {
-		h.logger.Debug("publish diagnostics failed", "uri", uri, "err", err)
-	}
+	h.enqueueDiagnostics(uri, merged, generation...)
 }
 
 func uriToPath(uri protocol.DocumentURI) (string, error) {
@@ -221,22 +230,37 @@ func (h *Handler) hasMappingCode(uri protocol.DocumentURI, text string) bool {
 }
 
 func (h *Handler) diagnosticsText(uri protocol.DocumentURI, text string) []protocol.Diagnostic {
+	return h.diagnosticsTextContext(context.Background(), uri, text)
+}
+
+func (h *Handler) diagnosticsTextContext(ctx context.Context, uri protocol.DocumentURI, text string) []protocol.Diagnostic {
 	diagnostics := []protocol.Diagnostic{}
+	if ctx.Err() != nil {
+		return diagnostics
+	}
 	if text != "" && h.hasMappingCode(uri, text) {
 		preview, err := benthos.PreviewEnvironment(h.benv, h.getSample(uri))
 		if err != nil {
 			h.logger.Debug("preview environment setup failed", "err", err)
 			preview = h.benv
 		}
-		env := preview.WithCustomImporter(func(name string) ([]byte, error) { return os.ReadFile(h.resolveImportPath(uri, name)) })
+		env := preview.WithCustomImporter(func(name string) ([]byte, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return os.ReadFile(h.resolveImportPath(uri, name))
+		})
 		if _, err := env.Parse(text); err != nil {
 			diagnostics = append(diagnostics, convertErrorToDiagnostics(text, err)...)
-		} else if sample := h.getSample(uri); sample != nil {
-			if _, err := h.executor.ExecuteThrough(h.parser, string(uri), sample, text, uint(len(text))); err != nil {
+		} else if sample := h.getSample(uri); sample != nil && ctx.Err() == nil {
+			if _, err := h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, uint(len(text))); err != nil && ctx.Err() == nil {
 				severity := protocol.SeverityWarning
 				diagnostics = append(diagnostics, protocol.Diagnostic{Range: protocol.Range{}, Severity: &severity, Source: "bloblang sample", Message: err.Error()})
 			}
 		}
+	}
+	if ctx.Err() != nil {
+		return nil
 	}
 	if strings.HasPrefix(string(uri), "untitled:") {
 		diagnostics = append(diagnostics, h.importHintDiagnostics(uri, text)...)

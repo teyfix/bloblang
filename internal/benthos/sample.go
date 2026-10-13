@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -143,8 +144,52 @@ func applySample(c *sampleContext, value any, field string) error {
 	}
 	return nil
 }
+
+const MaxSampleFileBytes = 4 << 20
+
+// ReadSampleFile rejects devices, pipes and oversized fixtures before opening
+// them. Recheck the opened file and cap the read in case a regular file grows.
+func ReadSampleFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	check := func(info os.FileInfo) error {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%s: sample must be a regular file", path)
+		}
+		if info.Size() > MaxSampleFileBytes {
+			return fmt.Errorf("%s: sample exceeds %d-byte limit", path, MaxSampleFileBytes)
+		}
+		return nil
+	}
+	if err := check(info); err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := check(info); err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(file, MaxSampleFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxSampleFileBytes {
+		return nil, fmt.Errorf("%s: sample exceeds %d-byte limit", path, MaxSampleFileBytes)
+	}
+	return data, nil
+}
+
 func loadSample(c *sampleContext, path, field string) error {
-	data, err := os.ReadFile(path)
+	data, err := ReadSampleFile(path)
 	if err != nil {
 		return err
 	}

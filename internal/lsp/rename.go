@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
@@ -83,6 +82,11 @@ func (u renameUnit) location(s *symbol) protocol.Location {
 }
 
 func (h *Handler) renameUnits(uri protocol.DocumentURI, text string) []renameUnit {
+	return h.navigationUnits(uri, text, false)
+}
+
+func (h *Handler) navigationUnits(uri protocol.DocumentURI, text string, allowErrors bool) []renameUnit {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	var units []renameUnit
 	if yamlDocument(uri) {
 		for _, region := range extractRegions(uri, text) {
@@ -94,7 +98,7 @@ func (h *Handler) renameUnits(uri protocol.DocumentURI, text string) []renameUni
 	for i := range units {
 		u := &units[i]
 		u.tree, _ = h.parser.Parse(string(u.uri)+":rename", u.text)
-		if u.tree != nil && !u.tree.RootNode().HasError() {
+		if u.tree != nil && (allowErrors || !u.tree.RootNode().HasError()) {
 			u.symbols = symbols(u.tree.RootNode(), u.text)
 		}
 	}
@@ -108,11 +112,15 @@ func closeRenameUnits(units []renameUnit) {
 	}
 }
 func (h *Handler) renameTarget(p protocol.TextDocumentPositionParams) ([]renameUnit, int, *symbol) {
+	return h.navigationTarget(p, false)
+}
+
+func (h *Handler) navigationTarget(p protocol.TextDocumentPositionParams, allowErrors bool) ([]renameUnit, int, *symbol) {
 	text, err := h.navigationText(p.TextDocument.URI)
 	if err != nil {
 		return nil, 0, nil
 	}
-	units := h.renameUnits(p.TextDocument.URI, text)
+	units := h.navigationUnits(p.TextDocument.URI, text, allowErrors)
 	for i := range units {
 		u := &units[i]
 		pos := p.Position
@@ -139,6 +147,7 @@ func (h *Handler) renameTarget(p protocol.TextDocumentPositionParams) ([]renameU
 	return units, 0, nil
 }
 func (h *Handler) PrepareRename(_ context.Context, p *protocol.PrepareRenameParams) (*protocol.PrepareRenameResult, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	units, index, s := h.renameTarget(p.TextDocumentPositionParams)
 	defer closeRenameUnits(units)
 	if s == nil {
@@ -148,6 +157,7 @@ func (h *Handler) PrepareRename(_ context.Context, p *protocol.PrepareRenamePara
 }
 
 func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if !validIdentifier(p.NewName) {
 		return nil, fmt.Errorf("use a Bloblang identifier: letters, digits and underscores, starting with a letter or underscore")
 	}
@@ -206,18 +216,13 @@ func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protoc
 		return nil, fmt.Errorf("map definition is no longer available")
 	}
 	target := defs[0]
-	candidates, err := h.renameFiles(ctx)
+	candidates, err := h.navigationFiles(ctx)
 	if err != nil {
 		return nil, err
 	}
 	candidates[p.TextDocument.URI] = true
 	candidates[protocol.DocumentURI(strings.Split(string(target.URI), "#bloblang-")[0])] = true
-	var paths []protocol.DocumentURI
-	for uri := range candidates {
-		paths = append(paths, uri)
-	}
-	sort.Slice(paths, func(i, j int) bool { return paths[i] < paths[j] })
-	for _, uri := range paths {
+	for _, uri := range sortedNavigationFiles(candidates) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -260,7 +265,7 @@ func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protoc
 	return edits, nil
 }
 
-func (h *Handler) renameFiles(ctx context.Context) (map[protocol.DocumentURI]bool, error) {
+func (h *Handler) navigationFiles(ctx context.Context) (map[protocol.DocumentURI]bool, error) {
 	files := map[protocol.DocumentURI]bool{}
 	supported := func(uri protocol.DocumentURI) bool {
 		s := strings.ToLower(string(uri))
@@ -285,7 +290,7 @@ func (h *Handler) renameFiles(ctx context.Context) (map[protocol.DocumentURI]boo
 			}
 			if d.IsDir() {
 				switch d.Name() {
-				case ".git", "node_modules", ".volumes", ".local", ".history", ".worktrees", "vendor":
+				case ".git", "node_modules", ".cache", ".state", ".volumes", ".local", ".history", ".worktrees", "vendor":
 					return filepath.SkipDir
 				}
 			} else if uri := fileURI(path); supported(uri) {
@@ -301,6 +306,7 @@ func (h *Handler) renameFiles(ctx context.Context) (map[protocol.DocumentURI]boo
 }
 
 func (h *Handler) mapNameExists(uri protocol.DocumentURI, text, name string, seen map[protocol.DocumentURI]bool) bool {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	if seen[uri] {
 		return false
 	}

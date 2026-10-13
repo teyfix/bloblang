@@ -2,8 +2,6 @@ package lsp
 
 import (
 	"context"
-	"encoding/json"
-	"go.yaml.in/yaml/v3"
 	"os"
 	"strings"
 
@@ -36,7 +34,12 @@ func trailingCollectionComma(n *tree_sitter.Node) bool {
 
 func tokens(n *tree_sitter.Node, source []byte, out *[]formatToken) {
 	switch n.Kind() {
-	case "string", "comment", "number":
+	case "comment":
+		// A CR consumed by the line-comment token belongs to the host line
+		// ending, including when formatting adds the final newline.
+		*out = append(*out, formatToken{text: strings.TrimSuffix(n.Utf8Text(source), "\r"), start: n.StartByte(), end: n.EndByte()})
+		return
+	case "string", "number":
 		*out = append(*out, formatToken{text: n.Utf8Text(source), start: n.StartByte(), end: n.EndByte()})
 		return
 	}
@@ -114,7 +117,8 @@ func (h *Handler) formatTextWithEnvironment(uri protocol.DocumentURI, text strin
 	if tabSize > 8 {
 		tabSize = 8
 	}
-	result := renderLayout(nodeLayout(tree.RootNode(), []byte(text), tabSize), printWidth) + "\n"
+	eol := sourceLineEnding(text)
+	result := renderLayoutLineEnding(nodeLayout(tree.RootNode(), []byte(text), tabSize), printWidth, eol) + eol
 	check, checkErr := h.parser.Parse(string(uri)+":formatted", result)
 	if checkErr != nil || check == nil {
 		return text, false
@@ -170,6 +174,7 @@ func formatSpace(a, b string) bool {
 	return true
 }
 func (h *Handler) Formatting(_ context.Context, p *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	text, ok := h.documents.Text(p.TextDocument.URI)
 	if !ok {
 		return []protocol.TextEdit{}, nil
@@ -188,44 +193,11 @@ func formatDocument(uri protocol.DocumentURI, text string, tabSize int, format f
 			if !valid || formatted == r.text {
 				continue
 			}
-			var replacement string
-			if r.style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 || strings.Contains(strings.TrimSuffix(formatted, "\n"), "\n") {
-				indent := r.keyIndent + 2
-				indicatorColumn := bytePosition(text, r.start).Character
-				if indicatorColumn <= len(strings.Split(text, "\n")[bytePosition(text, r.start).Line])-len(strings.TrimLeft(strings.Split(text, "\n")[bytePosition(text, r.start).Line], " ")) {
-					indent = max(indent, indicatorColumn+2)
-				} // key column is the scalar header column; content indentation comes from first mapped byte.
-				if len(r.offsets) > 0 && r.style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
-					pos := bytePosition(text, r.offsets[0])
-					indent = pos.Character
-				}
-				body := strings.TrimSuffix(formatted, "\n")
-				replacement = "|-\n" + strings.Repeat(" ", indent) + strings.ReplaceAll(body, "\n", "\n"+strings.Repeat(" ", indent)) + "\n"
-				if r.style&(yaml.LiteralStyle|yaml.FoldedStyle) == 0 {
-					replacement = strings.TrimSuffix(replacement, "\n")
-				}
-			} else {
-				b, _ := json.Marshal(strings.TrimSuffix(formatted, "\n"))
-				replacement = string(b)
-				if r.style&yaml.SingleQuotedStyle != 0 {
-					replacement = "'" + strings.ReplaceAll(strings.TrimSuffix(formatted, "\n"), "'", "''") + "'"
-				}
-				if r.style == 0 && !strings.Contains(strings.TrimSuffix(formatted, "\n"), "\n") {
-					replacement = strings.TrimSuffix(formatted, "\n")
-				}
+			formatted = preserveScalarEnding(formatted, r.text)
+			edit, ok := r.replaceSource(text, formatted)
+			if ok && edit.NewText != text[r.start:r.end] {
+				edits = append(edits, edit)
 			}
-			var candidate yaml.Node
-			if yaml.Unmarshal([]byte(text[:r.start]+replacement+text[r.end:]), &candidate) != nil {
-				b, _ := json.Marshal(strings.TrimSuffix(formatted, "\n"))
-				replacement = string(b)
-				if yaml.Unmarshal([]byte(text[:r.start]+replacement+text[r.end:]), &candidate) != nil {
-					continue
-				}
-			}
-			if replacement == text[r.start:r.end] {
-				continue
-			}
-			edits = append(edits, protocol.TextEdit{Range: protocol.Range{Start: bytePosition(text, r.start), End: bytePosition(text, r.end)}, NewText: replacement})
 		}
 		return edits
 	}

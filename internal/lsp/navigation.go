@@ -5,8 +5,7 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/teyfix/bloblang-lsp/internal/fileuri"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -154,6 +153,7 @@ func fileURI(path string) protocol.DocumentURI {
 	return protocol.DocumentURI(fileuri.FromPath(path))
 }
 func (h *Handler) Definition(_ context.Context, p *protocol.DefinitionParams) ([]protocol.Location, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	uri := p.TextDocument.URI
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
 		host, _ := h.documents.Text(uri)
@@ -183,6 +183,7 @@ func (h *Handler) Definition(_ context.Context, p *protocol.DefinitionParams) ([
 	return h.definitionForText(uri, text, p.Position)
 }
 func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, position protocol.Position) ([]protocol.Location, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	tree, err := h.parser.Parse(string(uri), text)
 	if err != nil {
 		return nil, nil
@@ -236,7 +237,8 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 			if err != nil {
 				return nil
 			}
-			t, err := h.parser.Parse(path, txt)
+			defer h.discardClosedDocumentTrees(fileURI(path))
+			t, err := h.parser.Parse(string(fileURI(path)), txt)
 			if err != nil {
 				return nil
 			}
@@ -273,115 +275,111 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 	}
 	return []protocol.Location{}, nil
 }
+
+// References and rename share binding resolution and candidate discovery, so
+// unopened mappings, YAML regions and every workspace root behave consistently.
 func (h *Handler) References(ctx context.Context, p *protocol.ReferenceParams) ([]protocol.Location, error) {
-	uri := p.TextDocument.URI
-	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
-		host, _ := h.documents.Text(uri)
-		r, pos, ok := h.regionAt(uri, p.Position)
-		if !ok {
-			if paths := h.yamlPathDefinition(uri, host, p.Position); len(paths) > 0 {
-				return h.fileReferences(paths[0].URI), nil
-			}
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	units, index, selected := h.navigationTarget(p.TextDocumentPositionParams, true)
+	defer closeRenameUnits(units)
+	if selected == nil {
+		text, err := h.navigationText(p.TextDocument.URI)
+		if err != nil {
 			return []protocol.Location{}, nil
 		}
-		cp := *p
-		cp.TextDocument.URI = r.uri
-		cp.Position = pos
-		vals, err := h.References(context.Background(), &cp)
-		for i := range vals {
-			if vals[i].URI == r.uri {
-				vals[i].URI = uri
-				vals[i].Range = r.hostRange(host, vals[i].Range)
+		if yamlDocument(p.TextDocument.URI) {
+			if paths := h.yamlPathDefinition(p.TextDocument.URI, text, p.Position); len(paths) > 0 {
+				return h.fileReferences(ctx, paths[0].URI)
 			}
 		}
-		return vals, err
-	}
-	text, ok := h.documents.Text(uri)
-	if !ok {
-		return []protocol.Location{}, nil
-	}
-	tree, err := h.parser.Parse(string(uri), text)
-	if err != nil {
-		return nil, nil
-	}
-	defer tree.Close()
-	ss := symbols(tree.RootNode(), text)
-	s := symbolAt(ss, uint(positionByte(text, p.Position)))
-	if s == nil {
-		defs, _ := h.definitionForText(uri, text, p.Position)
-		if len(defs) > 0 {
-			return h.fileReferences(defs[0].URI), nil
-		}
-		return []protocol.Location{}, nil
-	}
-	target := visibleDefinition(ss, s)
-	if s.declaration {
-		target = s
-	}
-	var out []protocol.Location
-	for _, candidate := range ss {
-		if candidate.name != s.name || candidate.kind != s.kind || candidate.declaration && !p.Context.IncludeDeclaration {
-			continue
-		}
-		if s.kind != "map" {
-			d := visibleDefinition(ss, &candidate)
-			if candidate.declaration {
-				d = &candidate
-			}
-			if d == nil || target == nil || d.node.Id() != target.node.Id() {
-				continue
-			}
-		}
-		out = append(out, nodeLocation(uri, text, candidate.node))
-	}
-	if s.kind == "map" && h.workspaceRoot != "" {
-		definition, _ := h.Definition(ctx, &protocol.DefinitionParams{TextDocumentPositionParams: protocol.TextDocumentPositionParams{TextDocument: p.TextDocument, Position: p.Position}})
-		_ = filepath.WalkDir(h.workspaceRoot, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-			if d.IsDir() {
-				if d.Name() == ".git" || d.Name() == "node_modules" || d.Name() == ".volumes" || d.Name() == ".local" || d.Name() == ".history" || d.Name() == ".worktrees" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			ext := filepath.Ext(path)
-			if ext != ".blobl" && ext != ".bloblang" {
-				return nil
-			}
-			other := fileURI(path)
-			if other == uri {
-				return nil
-			}
-			b, err := os.ReadFile(path)
-			if err != nil {
-				return nil
-			}
-			txt := string(b)
-			if open, ok := h.documents.Text(other); ok {
-				txt = open
-			}
-
-			t, err := h.parser.Parse(string(other), txt)
-			if err != nil {
-				return nil
-			}
-			defer t.Close()
-			for _, candidate := range symbols(t.RootNode(), txt) {
-				if candidate.name != s.name || candidate.kind != "map" || candidate.declaration && !p.Context.IncludeDeclaration {
+		for _, unit := range units {
+			pos := p.Position
+			if unit.region != nil {
+				var ok bool
+				pos, ok = unit.region.localPosition(text, pos)
+				if !ok {
 					continue
 				}
-				pos := bytePosition(txt, int(candidate.node.StartByte()))
-				defs, _ := h.definitionForText(other, txt, pos)
-				if len(definition) > 0 && len(defs) > 0 && defs[0] == definition[0] {
-					out = append(out, nodeLocation(other, txt, candidate.node))
+			}
+			defs, _ := h.definitionForText(unit.uri, unit.text, pos)
+			if len(defs) > 0 {
+				return h.fileReferences(ctx, defs[0].URI)
+			}
+		}
+		return []protocol.Location{}, nil
+	}
+	unit := &units[index]
+	out := []protocol.Location{}
+	if selected.kind != "map" {
+		target := visibleDefinition(unit.symbols, selected)
+		for i := range unit.symbols {
+			candidate := &unit.symbols[i]
+			if candidate.declaration && !p.Context.IncludeDeclaration {
+				continue
+			}
+			if sameRenameBinding(visibleDefinition(unit.symbols, candidate), target) {
+				out = append(out, unit.referenceLocation(candidate.node))
+			}
+		}
+		return out, nil
+	}
+	defs, _ := h.definitionForText(unit.uri, unit.text, bytePosition(unit.text, int(selected.node.StartByte())))
+	if len(defs) != 1 {
+		return out, nil
+	}
+	target := defs[0]
+	candidates, err := h.navigationFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	candidates[p.TextDocument.URI] = true
+	candidates[protocol.DocumentURI(strings.Split(string(target.URI), "#bloblang-")[0])] = true
+	for _, uri := range sortedNavigationFiles(candidates) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		text, err := h.navigationText(uri)
+		if err != nil {
+			continue
+		}
+		func() {
+			other := h.navigationUnits(uri, text, true)
+			defer closeRenameUnits(other)
+			for _, unit := range other {
+				for _, candidate := range unit.symbols {
+					if candidate.kind != "map" || candidate.name != selected.name || candidate.declaration && !p.Context.IncludeDeclaration {
+						continue
+					}
+					found, _ := h.definitionForText(unit.uri, unit.text, bytePosition(unit.text, int(candidate.node.StartByte())))
+					if len(found) == 1 && found[0] == target {
+						out = append(out, unit.referenceLocation(candidate.node))
+					}
 				}
 			}
-			return nil
-		})
+		}()
 	}
 	return out, nil
+}
+
+func sortedNavigationFiles(files map[protocol.DocumentURI]bool) []protocol.DocumentURI {
+	paths := make([]protocol.DocumentURI, 0, len(files))
+	for uri := range files {
+		paths = append(paths, uri)
+	}
+	sort.Slice(paths, func(i, j int) bool { return paths[i] < paths[j] })
+	return paths
+}
+
+func (u renameUnit) referenceLocation(n *tree_sitter.Node) protocol.Location {
+	loc := nodeLocation(u.uri, u.text, n)
+	if u.region != nil {
+		loc.URI = protocol.DocumentURI(strings.Split(string(u.uri), "#bloblang-")[0])
+		loc.Range = u.region.hostRange(u.host, loc.Range)
+	}
+	return loc
 }
 
 func directivePathAt(text string, offset int) (string, bool) {
@@ -402,34 +400,19 @@ func directivePathAt(text string, offset int) (string, bool) {
 	return "", false
 }
 
-func (h *Handler) fileReferences(target protocol.DocumentURI) []protocol.Location {
-	if h.workspaceRoot == "" {
-		return nil
+func (h *Handler) fileReferences(ctx context.Context, target protocol.DocumentURI) ([]protocol.Location, error) {
+	files, err := h.navigationFiles(ctx)
+	if err != nil {
+		return nil, err
 	}
-	var out []protocol.Location
-	_ = filepath.WalkDir(h.workspaceRoot, func(path string, d os.DirEntry, err error) error {
+	out := []protocol.Location{}
+	for _, uri := range sortedNavigationFiles(files) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		text, err := h.navigationText(uri)
 		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", ".volumes", ".local", ".history", ".worktrees", "vendor":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := filepath.Ext(path)
-		if ext != ".blobl" && ext != ".bloblang" && ext != ".yaml" && ext != ".yml" {
-			return nil
-		}
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		uri := fileURI(path)
-		text := string(b)
-		if open, ok := h.documents.Text(uri); ok {
-			text = open
+			continue
 		}
 		if yamlDocument(uri) {
 			for _, p := range yamlPaths(text) {
@@ -437,28 +420,25 @@ func (h *Handler) fileReferences(target protocol.DocumentURI) []protocol.Locatio
 					out = append(out, protocol.Location{URI: uri, Range: protocol.Range{Start: bytePosition(text, p.start), End: bytePosition(text, p.end)}})
 				}
 			}
-			return nil
 		}
-		tree, err := h.parser.Parse(string(uri)+":references", text)
-		if err != nil {
-			return nil
-		}
-		defer tree.Close()
-		walkNodes(tree.RootNode(), func(n *tree_sitter.Node) {
-			if n.Kind() != "import_statement" {
-				return
-			}
-			for i := uint(0); i < n.NamedChildCount(); i++ {
-				arg := n.NamedChild(i)
-				if arg.Kind() == "string" {
-					name := decodeImportPath(arg.Utf8Text([]byte(text)))
-					if fileURI(h.resolveImportPath(uri, name)) == target {
-						out = append(out, nodeLocation(uri, text, arg))
-					}
+		func() {
+			units := h.navigationUnits(uri, text, true)
+			defer closeRenameUnits(units)
+			for _, unit := range units {
+				if unit.tree == nil {
+					continue
 				}
+				walkNodes(unit.tree.RootNode(), func(n *tree_sitter.Node) {
+					if n.Kind() != "import_statement" {
+						return
+					}
+					path := n.ChildByFieldName("path")
+					if path != nil && fileURI(h.resolveImportPath(unit.uri, decodeImportPath(path.Utf8Text([]byte(unit.text))))) == target {
+						out = append(out, unit.referenceLocation(path))
+					}
+				})
 			}
-		})
-		return nil
-	})
-	return out
+		}()
+	}
+	return out, nil
 }

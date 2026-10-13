@@ -23,7 +23,7 @@ func TestQuotedRecursiveGlobsFormatAndLint(t *testing.T) {
 	for _, path := range paths {
 		writeInput(t, path, "root=this\n")
 	}
-	for _, skip := range []string{".git", ".volumes", "node_modules", "vendor", "target"} {
+	for _, skip := range []string{".git", ".cache", ".state", ".worktrees", ".volumes", "node_modules", "vendor", "target"} {
 		writeInput(t, filepath.Join(dir, "nested", skip, "invalid.blobl"), "root = [\n")
 	}
 	writeInput(t, filepath.Join(dir, "ignored.txt"), "root = [\n")

@@ -1,15 +1,16 @@
 package lsp
 
 import (
+	"context"
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/teyfix/bloblang-lsp/internal/benthos"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"sort"
 	"strings"
 )
 
-func (h *Handler) methodCompletion(uri protocol.DocumentURI, text string, pos protocol.Position, items []protocol.CompletionItem) []protocol.CompletionItem {
-	sample := h.getSample(uri)
+func (h *Handler) methodCompletion(ctx context.Context, uri protocol.DocumentURI, sample *benthos.Sample, text string, pos protocol.Position, items []protocol.CompletionItem) []protocol.CompletionItem {
 	if sample == nil {
 		return items
 	}
@@ -43,7 +44,7 @@ func (h *Handler) methodCompletion(uri protocol.DocumentURI, text string, pos pr
 	if object == nil || statement == nil || hoverExpression(object) == nil {
 		return items
 	}
-	result, err := h.executor.EvaluateExpression(h.parser, string(uri)+":completion", sample, candidate, statement, object)
+	result, err := h.executor.EvaluateExpressionContext(ctx, h.parser, string(uri)+":completion", sample, candidate, statement, object)
 	if err != nil || result == nil || result.Deleted || result.Value == nil {
 		return items
 	}

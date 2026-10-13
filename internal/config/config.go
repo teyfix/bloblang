@@ -13,7 +13,6 @@ type Config struct {
 	BloblangDocsURL        string        `mapstructure:"bloblang_docs_url"`
 	LogLevel               string        `mapstructure:"log_level"`
 	DiagnosticsDebounce    time.Duration `mapstructure:"diagnostics_debounce"`
-	InlineResultDebounce   time.Duration `mapstructure:"inline_result_debounce"`
 	MaxInlineDocumentBytes int           `mapstructure:"max_inline_document_bytes"`
 	MaxInlineResultBytes   int           `mapstructure:"max_inline_result_bytes"`
 	PartialExecCacheSize   int           `mapstructure:"partial_exec_cache_size"`
@@ -38,7 +37,6 @@ func Load() (*Config, error) {
 	v.SetDefault("bloblang_docs_url", "https://docs.redpanda.com/redpanda-connect/guides/bloblang")
 	v.SetDefault("log_level", "info")
 	v.SetDefault("diagnostics_debounce", 200*time.Millisecond)
-	v.SetDefault("inline_result_debounce", 100*time.Millisecond)
 	v.SetDefault("max_inline_document_bytes", 150000)
 	v.SetDefault("max_inline_result_bytes", 100)
 	v.SetDefault("partial_exec_cache_size", 1000)
@@ -48,7 +46,6 @@ func Load() (*Config, error) {
 		"bloblang_docs_url",
 		"log_level",
 		"diagnostics_debounce",
-		"inline_result_debounce",
 		"max_inline_document_bytes",
 		"max_inline_result_bytes",
 		"partial_exec_cache_size",

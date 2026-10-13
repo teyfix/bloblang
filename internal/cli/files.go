@@ -155,7 +155,7 @@ func collectInputs(paths []string, stdin io.Reader, stdinPath string, singleFile
 
 func skippedDirectory(name string) bool {
 	switch name {
-	case ".git", ".volumes", "node_modules", "vendor", "target":
+	case ".git", ".cache", ".state", ".worktrees", ".volumes", "node_modules", "vendor", "target":
 		return true
 	default:
 		return false

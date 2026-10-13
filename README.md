@@ -21,9 +21,10 @@ Highlighting, diagnostics, completion, hover and navigation work inside recogniz
 ## Editor features
 
 - Benthos syntax and semantic diagnostics, plus nonblocking sample problems.
-- Formatting that preserves tokens, comments and string content; malformed syntax is left unchanged.
+- Formatting that preserves tokens, attached comments, string content and line endings; malformed syntax is left unchanged.
 - Function and method documentation, sampled field/expression values, before-assignment `root` previews, and output inlay tooltips.
-- Definition and references for local variables and named maps (including literal `.apply("name")` calls), import paths and YAML `mapping: from "path"` links.
+- Definition and references for local variables and named maps (including literal `.apply("name")` calls), import paths and YAML `mapping: from "path"` links. References search every workspace root and YAML consumer, using unsaved buffers when available.
+- Signature help with active parameter documentation, a hierarchical map/assignment outline, and folding for structures, comments and imports. See [editor navigation features](docs/features/editor.md).
 - Rename local variables, lambda parameters and named maps with **F2** in VS Code, including embedded YAML and imported maps. See [rename support and scope](docs/features/rename.md).
 - Function/method snippets, local variable/metadata completion, and sampled receiver guidance. Method filtering applies only when a valid sample yields a reliable receiver value; otherwise all static completions remain available.
 - YAML literal, folded, plain and quoted mappings under `mapping`, `request_map`, `result_map`, `args_mapping`, `fields_mapping`, `check` and `bloblang`, plus `${! ... }` expressions. Host YAML formatting is preserved; use the extension's explicit **Format Embedded Mappings** command.
@@ -117,7 +118,7 @@ blobl lint --format json config.yaml # machine-readable diagnostics
 blobl lsp                           # language server over stdin/stdout
 ```
 
-`fmt` and `lint` read stdin when no path is given or the path is `-`. Use `--stdin-filepath config.yaml` to select YAML handling and resolve configuration and imports. Directory traversal includes `.blobl`, `.bloblang`, `.yaml` and `.yml`, skips common generated directories and symlinks, and processes files in a deterministic order. Quote glob patterns so `blobl` expands them; `**` matches recursively. Unmatched patterns return `2` unless ignore rules filtered matches or pruned directories during the scan. Directory and glob scans honor `.gitignore`, `.bloblangignore` and `files.exclude`; `--no-ignore` bypasses those exclusions. Explicit filenames are always included. CLI configuration comes from the nearest ancestor `.bloblangrc.json` within the nearest Git project, or up to the filesystem root outside Git. Linting uses static analysis without samples or mapping execution.
+`fmt` and `lint` read stdin when no path is given or the path is `-`. Use `--stdin-filepath config.yaml` to select YAML handling and resolve configuration and imports. Directory traversal includes `.blobl`, `.bloblang`, `.yaml` and `.yml`, skips generated directories including `.cache`, `.state` and `.worktrees`, plus symlinks, and processes files in a deterministic order. Quote glob patterns so `blobl` expands them; `**` matches recursively. Unmatched patterns return `2` unless ignore rules filtered matches or pruned directories during the scan. Directory and glob scans honor `.gitignore`, `.bloblangignore` and `files.exclude`; `--no-ignore` bypasses those exclusions. Explicit filenames are always included. CLI configuration comes from the nearest ancestor `.bloblangrc.json` within the nearest Git project, or up to the filesystem root outside Git. Linting uses static analysis without samples or mapping execution.
 
 Exit status is `0` on success, `1` for warning/error diagnostics or formatting drift with `--check`, and `2` for usage, configuration, I/O or formatting syntax failures. Hints and informational diagnostics do not fail lint. See the [CLI reference](docs/cli.md) for stdin examples, safe fixes and configuration behavior.
 
@@ -151,7 +152,7 @@ To verify a private mapping corpus without changing files:
 BLOBLANG_CORPUS_LIST=/path/to/newline-delimited-files.txt go test ./internal/lsp -run TestFormatterCorpus -v
 ```
 
-The server implements full document sync, completion, hover, formatting, definition, references, diagnostics, inlay hints, code lenses and lint Quick Fixes. `blobl lsp`, `bloblang-lsp` and the older `language-server` entrypoint write logs to stderr and speak LSP on stdin/stdout. Workspace editor settings use `.bloblangrc.json` as shown below. Legacy server startup settings use the `.bloblangrc` base name with supported extensions (for example `.bloblangrc.yaml`) and `BLOBLANG_LSP_*` overrides; see [configuration](docs/core/settings.md). Startup settings require restarting and do not set preview print width.
+The server implements full document sync, completion, hover, formatting, definition, references, diagnostics, inlay hints, code lenses, signature help, document symbols, folding and lint Quick Fixes. `blobl lsp`, `bloblang-lsp` and the older `language-server` entrypoint write logs to stderr and speak LSP on stdin/stdout. Workspace editor settings use `.bloblangrc.json` as shown below. Legacy server startup settings use the `.bloblangrc` base name with supported extensions (for example `.bloblangrc.yaml`) and `BLOBLANG_LSP_*` overrides; see [configuration](docs/core/settings.md). Startup settings require restarting and do not set preview print width.
 
 ## Workspace formatting, previews and linting
 
@@ -182,7 +183,7 @@ See the [generated rule reference](docs/features/lint-rules.md) for defaults and
 
 ### Formatting and previews
 
-Use **Format Document** in a Bloblang file or **Bloblang: Format Embedded Mappings** in YAML. The formatter preserves comments, string contents and explicit parentheses; it removes trailing commas from single-line objects and arrays while preserving existing commas in multiline forms. It collapses short expression groups, expands longer groups, and verifies its output with Tree-sitter and Benthos before offering edits. Long method chains and chains containing multiline calls break after dots. Lambda bodies wrap independently while fitting arguments and lambda parameters stay together. Object and array arguments hug the call parentheses. Lambdas ending in a collection, `if`, or `match` block keep the call’s closing parenthesis beside the body’s closing delimiter. YAML mappings preserve short scalar styles where valid; multiline output uses literal blocks. Formatting does not apply lint refactors.
+Use **Format Document** in a Bloblang file or **Bloblang: Format Embedded Mappings** in YAML. The formatter preserves comments, string contents and explicit parentheses; it removes trailing commas from single-line objects and arrays while preserving existing commas in multiline forms. It collapses short expression groups, expands longer groups, and verifies its output with Tree-sitter and Benthos before offering edits. Long method chains and chains containing multiline calls break after dots. Lambda bodies wrap independently while fitting arguments and lambda parameters stay together. Object and array arguments hug the call parentheses. Lambdas ending in a collection, `if`, or `match` block keep the call’s closing parenthesis beside the body’s closing delimiter. YAML mappings preserve short scalar styles where valid; multiline output uses literal blocks. Scalar headers retain comments, anchors, tags and valid chomping/indentation indicators. Embedded edits are checked against the complete YAML host. Inline comments remain attached to their syntax; an attached comment may exceed the preferred print width. Formatting does not apply lint refactors.
 
 ```bloblang
 root = this.cast.
@@ -199,11 +200,11 @@ root = this.cast.
 
 Hover values, inlay tooltips and Show Output share YAML previews by default. Set `preview.format` to `json` for compact JSON. Both use `formatter.printWidth`; inline labels have their own size limit. An unset `env()` is null, so `.catch(...)` alone does not satisfy the environment rule. Use `.or(default)`, `.or(throw("required"))`, or `.not_null().catch(throw("required"))`.
 
-Large hover and inlay tooltip previews are capped at 4 KiB / 60 lines, with limits applied to collections and long strings before YAML formatting. A **Preview truncated** notice appears at the top; **Show Input / Show Output** opens the complete message. Evaluation uses the full sample. See [hover preview limits](docs/features/hover.md).
+Large hover and inlay tooltip previews are capped at 4 KiB / 60 lines, with limits applied to collections and long strings before YAML formatting. A **Preview truncated** notice appears at the top; **Show Input / Show Output** opens the complete message. Evaluation uses the full sample. Inlay requests evaluate only requested positions, and unchanged results are reused across hints, hovers and code lenses with bounded cache retention. Edits, close and dependency changes invalidate them; canceled or superseded work stops between runtime calls. A synchronous Bloblang call already running cannot be interrupted. See [hover preview limits](docs/features/hover.md).
 
 ### Lint suggestions and Quick Fixes
 
-Lint suggestions account for object merge/replacement, missing fields and effectful evaluation. Grouped assignments, projections, deletion and existence checks are advisory. Consecutive `.without()` calls with literal arguments have an explicit Quick Fix. The server does not implement `source.fixAll`; formatting does not apply lint refactors. See [lint behavior and fixes](docs/features/lint.md).
+Lint suggestions account for object merge/replacement, missing fields and effectful evaluation. Grouped assignments, projections, deletion and existence checks are advisory. Consecutive `.without()` calls with literal arguments have an explicit Quick Fix. Embedded Quick Fixes preserve YAML indentation and validate the edited host. Suppression comments follow the next syntax node when formatting wraps it across lines. The server does not implement `source.fixAll`; formatting does not apply lint refactors. See [lint behavior and fixes](docs/features/lint.md).
 
 ![A Bloblang lint diagnostic and its explicit Quick Fix in VS Code](docs/demos/lint-quick-fix.gif)
 
