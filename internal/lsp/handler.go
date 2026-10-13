@@ -21,6 +21,7 @@ import (
 type Handler struct {
 	config          *config.Config
 	logger          *slog.Logger
+	serverVersion   string
 	benv            *bloblang.Environment
 	parser          *benthos.Bloblang
 	completionItems []protocol.CompletionItem
@@ -56,7 +57,8 @@ type Handler struct {
 	refreshLenses bool
 }
 
-func NewHandler(cfg *config.Config, logger *slog.Logger) (*Handler, error) {
+// NewHandler defaults its advertised version to dev when build metadata is absent.
+func NewHandler(cfg *config.Config, logger *slog.Logger, buildVersion ...string) (*Handler, error) {
 	benv := benthos.NewEnvironment()
 	parser, err := benthos.NewBloblang()
 
@@ -67,10 +69,15 @@ func NewHandler(cfg *config.Config, logger *slog.Logger) (*Handler, error) {
 	items, fnData, methData := benthos.BuildCompletionCache(benv)
 	fnDocs, methDocs := benthos.BuildAllDocs(fnData, methData, cfg.BloblangDocsURL)
 	executor := benthos.NewExecutor(benv, cfg)
+	version := "dev"
+	if len(buildVersion) > 0 && buildVersion[0] != "" {
+		version = buildVersion[0]
+	}
 
 	return &Handler{
 		config:            cfg,
 		logger:            logger,
+		serverVersion:     version,
 		benv:              benv,
 		parser:            parser,
 		completionItems:   items,
@@ -134,7 +141,7 @@ func (h *Handler) Initialize(_ context.Context, params *protocol.InitializeParam
 			CodeLensProvider:           &protocol.CodeLensOptions{},
 			ExecuteCommandProvider:     &protocol.ExecuteCommandOptions{Commands: []string{"bloblang-lsp.showResult", "bloblang-lsp.openFile"}},
 		},
-		ServerInfo: &protocol.ServerInfo{Name: "bloblang-lsp", Version: "v0.0.1"},
+		ServerInfo: &protocol.ServerInfo{Name: "bloblang-lsp", Version: h.serverVersion},
 	}, nil
 }
 

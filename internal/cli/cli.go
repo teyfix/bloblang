@@ -23,6 +23,13 @@ type BuildInfo struct {
 	DateBuilt string
 }
 
+func (b BuildInfo) version() string {
+	if b.Version == "" {
+		return "dev"
+	}
+	return b.Version
+}
+
 // Run executes blobl, returning 0 for success, 1 for findings or formatting drift,
 // and 2 for usage, configuration, or operational errors. Streams belong to the caller.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, build BuildInfo) int {
@@ -34,10 +41,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		if len(args) != 1 {
 			return fail(stderr, errors.New("version accepts no arguments"))
 		}
-		version := build.Version
-		if version == "" {
-			version = "dev"
-		}
+		version := build.version()
 		if build.DateBuilt != "" {
 			version += " (built " + build.DateBuilt + ")"
 		}
@@ -65,7 +69,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		if len(args) != 1 {
 			return fail(stderr, errors.New("lsp accepts no arguments"))
 		}
-		return runLSP(ctx, stdin, stdout, stderr)
+		return runLSP(ctx, stdin, stdout, stderr, build)
 	case "fmt", "lint":
 		return runTool(ctx, args[0], args[1:], stdin, stdout, stderr)
 	default:
@@ -76,7 +80,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 // RunLegacy preserves the historical no-argument stdio server startup.
 func RunLegacy(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer, build BuildInfo) int {
 	if len(args) == 0 {
-		return runLSP(ctx, stdin, stdout, stderr)
+		return runLSP(ctx, stdin, stdout, stderr, build)
 	}
 	return Run(ctx, args, stdin, stdout, stderr, build)
 }
@@ -291,15 +295,18 @@ func (s stdio) Close() error {
 	return nil
 }
 
-func runLSP(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer) int {
+func runLSP(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, build BuildInfo) int {
 	cfg, err := config.Load()
 	if err != nil {
 		return fail(stderr, err)
 	}
 	var level slog.Level
 	_ = level.UnmarshalText([]byte(strings.ToUpper(cfg.LogLevel)))
-	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
-	handler, err := lsp.NewHandler(cfg, logger)
+	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level})).With("version", build.version())
+	if build.DateBuilt != "" {
+		logger = logger.With("dateBuilt", build.DateBuilt)
+	}
+	handler, err := lsp.NewHandler(cfg, logger, build.version())
 	if err != nil {
 		return fail(stderr, err)
 	}

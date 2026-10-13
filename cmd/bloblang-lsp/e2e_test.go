@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -21,19 +22,24 @@ func TestBinaryStartup(t *testing.T) {
 		name, source string
 		args         []string
 		graceful     bool
+		version      string
 	}{
-		{name: "bloblang-lsp", source: ".", graceful: true},
-		{name: "language-server", source: "../language-server", graceful: true},
-		{name: "blobl", source: "../blobl", args: []string{"lsp"}, graceful: true},
+		{name: "bloblang-lsp", source: ".", graceful: true, version: "v9.8.7"},
+		{name: "language-server", source: "../language-server", graceful: true, version: "v9.8.7"},
+		{name: "blobl", source: "../blobl", args: []string{"lsp"}, graceful: true, version: "v9.8.7"},
 		{name: "legacy-stdin-close", source: "."},
 	} {
-		t.Run(tc.name, func(t *testing.T) { testBinaryStartup(t, tc.source, tc.args, tc.graceful) })
+		t.Run(tc.name, func(t *testing.T) { testBinaryStartup(t, tc.source, tc.args, tc.graceful, tc.version) })
 	}
 }
 
-func testBinaryStartup(t *testing.T, source string, args []string, graceful bool) {
+func testBinaryStartup(t *testing.T, source string, args []string, graceful bool, version string) {
 	bin := filepath.Join(t.TempDir(), "bloblang-lsp.exe")
-	build := exec.Command("go", "build", "-o", bin, ".")
+	buildArgs := []string{"build", "-o", bin}
+	if version != "" {
+		buildArgs = append(buildArgs, "-ldflags", "-X main.Version="+version+" -X main.DateBuilt=2026-10-13")
+	}
+	build := exec.Command("go", append(buildArgs, ".")...)
 	build.Dir = source
 	out, err := build.CombinedOutput()
 	require.NoError(t, err, string(out))
@@ -41,6 +47,7 @@ func testBinaryStartup(t *testing.T, source string, args []string, graceful bool
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = append(os.Environ(), "BLOBLANG_LSP_LOG_LEVEL=info")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdin, err := cmd.StdinPipe()
@@ -64,6 +71,19 @@ func testBinaryStartup(t *testing.T, source string, args []string, graceful bool
 	})
 	response := readMessage(t, stdout)
 	require.Contains(t, response, "capabilities")
+	var initialized struct {
+		Result struct {
+			ServerInfo struct {
+				Version string `json:"version"`
+			} `json:"serverInfo"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(response), &initialized))
+	wantVersion := version
+	if wantVersion == "" {
+		wantVersion = "dev"
+	}
+	require.Equal(t, wantVersion, initialized.Result.ServerInfo.Version)
 
 	writeMessage(t, stdin, map[string]interface{}{"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
 	_ = readMessage(t, stdout)
@@ -85,6 +105,18 @@ func testBinaryStartup(t *testing.T, source string, args []string, graceful bool
 	}
 	if graceful {
 		_ = stdin.Close() // Wait may already have closed the parent pipe.
+	}
+	var startup string
+	for _, line := range strings.Split(stderr.String(), "\n") {
+		if strings.Contains(line, `msg="server starting"`) {
+			startup = line
+			break
+		}
+	}
+	require.NotEmpty(t, startup, stderr.String())
+	require.Contains(t, startup, "version="+wantVersion)
+	if version != "" {
+		require.Contains(t, startup, "dateBuilt=2026-10-13")
 	}
 }
 
