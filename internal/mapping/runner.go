@@ -29,6 +29,9 @@ type Request struct {
 	MappingPath string            `json:"mappingPath,omitempty"`
 	InputPath   string            `json:"inputPath,omitempty"`
 	SamplePath  string            `json:"samplePath,omitempty"`
+	// Origin preserves the absolute mapping path for host-side diagnostics.
+	// It is deliberately excluded from the isolated worker request.
+	Origin string `json:"-"`
 }
 
 // Error identifies the failing stage. Parser positions, when present, are
@@ -45,11 +48,24 @@ type Error struct {
 // has Output null and Deleted true; an ordinary JSON null has Deleted false.
 // Errors never expose partial output. Metadata is empty for deleted messages.
 type Result struct {
-	Output    any            `json:"output"`
-	Metadata  map[string]any `json:"metadata"`
-	Deleted   bool           `json:"deleted"`
-	Error     *Error         `json:"error,omitempty"`
-	RawOutput *RawOutput     `json:"rawOutput,omitempty"`
+	Output      any            `json:"output"`
+	Metadata    map[string]any `json:"metadata"`
+	Deleted     bool           `json:"deleted"`
+	Error       *Error         `json:"error,omitempty"`
+	RawOutput   *RawOutput     `json:"rawOutput,omitempty"`
+	Diagnostics []Diagnostic   `json:"diagnostics"`
+	LintError   *Error         `json:"lintError,omitempty"`
+}
+
+// Diagnostic contains a static finding with one-based Unicode character ranges.
+type Diagnostic struct {
+	Line      int    `json:"line"`
+	Column    int    `json:"column"`
+	EndLine   int    `json:"endLine"`
+	EndColumn int    `json:"endColumn"`
+	Severity  string `json:"severity"`
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message"`
 }
 
 // RawOutput preserves message bytes when the runtime does not retain a
