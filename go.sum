@@ -315,6 +315,8 @@ github.com/bitfield/gotestdox v0.2.2/go.mod h1:D+gwtS0urjBrzguAkTM2wodsTQYFHdpx8
 github.com/bmatcuk/doublestar/v4 v4.10.3 h1:1UIv1+fqH3++ViVkpnaPTB+Pi1UHycnPFAq14zgK+gI=
 github.com/bmatcuk/doublestar/v4 v4.10.3/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/bobg/gcsobj v0.1.2/go.mod h1:vS49EQ1A1Ib8FgrL58C8xXYZyOCR2TgzAdopy6/ipa8=
+github.com/bombsimon/jtd-infer-go v1.0.1 h1:HBH9iBeP2ODyKvUBa1iNxTzFfa7FAvedw35nfVjVL/Y=
+github.com/bombsimon/jtd-infer-go v1.0.1/go.mod h1:rSTzDV/Ulr4UoTJ/frgCjChG27PJ+cxkmQFA3uEDgBk=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/btnguyen2k/consu/checksum v1.1.1 h1:kdIJGk3yl83Nn1HxZRk3bXJM0xvlwTcTYUmZ8BiloPU=
 github.com/btnguyen2k/consu/checksum v1.1.1/go.mod h1:/zZ8EXdphDYEkBFua51hK9y3rODCPIkiZYnCDlHT670=
@@ -754,6 +756,8 @@ github.com/jmoiron/sqlx v1.3.5/go.mod h1:nRVWtLre0KfCLJvgxzCsLVMogSvQ1zNJtpYr2Cc
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
 github.com/json-iterator/go v1.1.9/go.mod h1:KdQUCv79m/52Kvf8AW2vK1V8akMuk1QjK/uOdHXbAo4=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
+github.com/jsontypedef/json-typedef-go v0.0.0-20200503043955-4280071bd745 h1:g5e59oKweCDh4NCkwPVTCSvkA/xI4rEJ9gHpGwtc7gQ=
+github.com/jsontypedef/json-typedef-go v0.0.0-20200503043955-4280071bd745/go.mod h1:vt/4bvsIJyrXdW084b66lVgihz1sOcKAC9l4tqJuty8=
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/jung-kurt/gofpdf v1.0.0/go.mod h1:7Id9E/uU8ce6rXgefFLlgrJj/GYY22cpxn+r32jIOes=
