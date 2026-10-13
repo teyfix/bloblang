@@ -182,6 +182,12 @@ func scalarSource(n *yaml.Node, text string, starts []int, lines []string) (stri
 				d = n.Value
 			}
 		}
+		// A chomped scalar ends before its physical newline. Mapping its final
+		// boundary to the next host line would make a quick fix consume that
+		// newline and join the following YAML key to the replacement.
+		if len(d) > 0 && !strings.HasSuffix(d, "\n") {
+			positions[len(d)] = positions[len(d)-1] + 1
+		}
 		return d, positions, end
 	}
 	if n.Style&(yaml.SingleQuotedStyle|yaml.DoubleQuotedStyle) != 0 {

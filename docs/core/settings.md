@@ -1,13 +1,15 @@
 # Configuration
 
-The server has two configuration readers: startup settings in [`internal/config`](../../internal/config/config.go) and workspace editor settings in [`internal/editorconfig`](../../internal/editorconfig/config.go). The VS Code `.bloblangrc.json` schema describes workspace editor settings.
+The server has two configuration readers: startup settings in [`internal/config`](../../internal/config/config.go) and workspace editor settings in [`internal/editorconfig`](../../internal/editorconfig/config.go). The VS Code `.bloblangrc.json` schema describes workspace editor settings. `blobl fmt` and `blobl lint` use the same editor settings schema, with the CLI lookup behavior below.
 
 ## Workspace editor settings
 
-Place `.bloblangrc.json` at a workspace root. The server chooses the longest matching workspace root for the document, falling back to the first workspace root, or the document's parent directory when no workspace root is available. Embedded mappings use their host YAML document's directory. It does not search upward for nested configuration files.
+Each document uses the nearest ancestor `.bloblangrc.json`, starting in its directory and stopping at the deepest containing workspace root, inclusive. Embedded mappings use their host YAML document's directory. A nested configuration replaces ancestor settings rather than merging them. For loose documents outside all workspace roots, lookup stops at the nearest Git project root (a `.git` directory or worktree marker); outside Git it continues to the filesystem root.
 
 | Setting | Default | Accepted values |
 | --- | --- | --- |
+| `files.exclude` | `[]` | Array of Gitignore-style patterns relative to the configuration directory |
+| `files.respectGitignore` | `true` | Boolean; controls `.gitignore` processing in CLI directory/glob scans |
 | `formatter.printWidth` | `80` | Integer from 20 through 1000 |
 | `preview.format` | `"yaml"` | `"yaml"` or `"json"` |
 | `lint.enabled` | `true` | Boolean |
@@ -23,6 +25,18 @@ Registry metadata drives both the schema and generated rule reference:
 go run ./cmd/config-schema > schemas/bloblangrc.schema.json
 go run ./cmd/config-schema --rules > docs/features/lint-rules.md
 ```
+
+## CLI settings
+
+For each input file, `blobl fmt` and `blobl lint` search from its directory upward for the nearest `.bloblangrc.json`, stopping at the nearest Git project root, inclusive. Outside Git, lookup continues to the filesystem root. Embedded mappings use the YAML file's location. The nearest file is used on its own; ancestor files are not merged. Without a configuration file, the registry defaults apply. Stdin uses `--stdin-filepath` for this lookup and for import resolution, or the current working directory when no filepath is supplied.
+
+Unlike editor requests, invalid CLI configuration is reported as a failure with exit status `2`. `formatter.printWidth` controls formatting; `lint.enabled` and `lint.rules` control static lint findings. Preview settings have no effect on CLI lint because it does not load samples or execute mappings. See the [CLI reference](../cli.md).
+
+Directory and glob discovery honors `.gitignore`, `.bloblangignore` and `files.exclude`; explicitly named regular files bypass exclusions. `files.respectGitignore: false` disables only `.gitignore`, while `--no-ignore` bypasses all ignore and configured exclusion rules. Built-in generated-directory and symlink skips remain in effect. File discovery settings do not suppress diagnostics for open editor documents.
+
+## Source paths
+
+Bloblang imports resolve relative to the source file's directory; absolute paths are accepted. External YAML `mapping: from "path"` references try the host YAML file's directory first, then the selected project root. The editor uses its deepest containing workspace root; the CLI and loose editor documents discover the nearest Git root. Without a project root, YAML references use only the host file's directory. Missing references retain the local path in diagnostics.
 
 ## Legacy server startup settings
 

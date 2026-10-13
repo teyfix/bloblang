@@ -1,12 +1,14 @@
 # Bloblang Language Server
 
-A single Go LSP binary for Bloblang and mappings embedded in Redpanda Connect YAML. Diagnostics, formatting, completion, hover previews, navigation and linting live in the server and are available to LSP clients. The [VS Code extension](https://github.com/teyfix/vscode-bloblang) supplies editor integration and highlighting, downloads and extracts the latest server release archive, and caches the executable for later starts.
+Bloblang tooling for standalone mappings and mappings embedded in Redpanda Connect YAML. The `blobl` CLI provides `lsp`, `lint` and `fmt` commands using the same analysis and formatting as the language server. Diagnostics, completion, hover previews and navigation are available to LSP clients. The [VS Code extension](https://github.com/teyfix/vscode-bloblang) supplies editor integration and highlighting, installs the latest `blobl` release, and uses it for the language server and integrated terminal commands.
 
 ![Typing a Bloblang mapping in VS Code with live highlighting and completion](docs/demos/typing.gif)
 
 ## Try it in VS Code
 
-Install [Bloblang for VS Code](https://marketplace.visualstudio.com/items?itemName=teyfix.vscode-bloblang), then open a `.blobl`, `.bloblang` or Redpanda Connect YAML file. The extension manages the server automatically; no Go toolchain or manual server installation is needed. To use a local build, set `bloblang.server.path` to its executable.
+Install [Bloblang for VS Code](https://marketplace.visualstudio.com/items?itemName=teyfix.vscode-bloblang), then open a `.blobl`, `.bloblang` or Redpanda Connect YAML file. The extension manages `blobl` automatically; no Go toolchain or manual server installation is needed. To use a local CLI build, set `bloblang.server.path` to its executable and `bloblang.server.args` to `["lsp"]`.
+
+With automatic CLI management enabled, new integrated terminals receive `blobl` on `PATH`. Use **Bloblang: Check for Tool Updates** to check immediately, or **Bloblang: Install CLI for External Terminals** to copy the binary into a separate installation directory. Add that directory to your external shell's `PATH` if needed. Remote workspaces install on the remote extension host.
 
 The demos below show the server in action through the VS Code extension. Each focuses on a separate feature.
 
@@ -100,18 +102,48 @@ Use fixture values in these overrides. They apply to whole samples loaded automa
 
 Migration from the old sample syntax: change `#!sample {"name":"Ada"}` to `#!input {"name":"Ada"}`, or `#!sample {"input":{"name":"Ada"}}`. Wrap old raw sample files under `$bloblang.input`.
 
+## Command line
+
+Download a `blobl-v<version>-<os>-<arch>` archive from [Releases](https://github.com/teyfix/bloblang-lsp/releases), extract `blobl` (`blobl.exe` on Windows), and put it on your `PATH`.
+
+```sh
+blobl fmt mapping.blobl              # formatted source on stdout
+blobl fmt --write mappings/          # update files in place
+blobl fmt --check mappings/          # check formatting in CI
+blobl fmt --check '**/*.blobl'       # recursive glob expanded by blobl
+blobl lint mappings/                 # static diagnostics
+blobl lint --fix mappings/           # apply safe fixes, then report diagnostics
+blobl lint --format json config.yaml # machine-readable diagnostics
+blobl lsp                           # language server over stdin/stdout
+```
+
+`fmt` and `lint` read stdin when no path is given or the path is `-`. Use `--stdin-filepath config.yaml` to select YAML handling and resolve configuration and imports. Directory traversal includes `.blobl`, `.bloblang`, `.yaml` and `.yml`, skips common generated directories and symlinks, and processes files in a deterministic order. Quote glob patterns so `blobl` expands them; `**` matches recursively. Unmatched patterns return `2` unless ignore rules filtered matches or pruned directories during the scan. Directory and glob scans honor `.gitignore`, `.bloblangignore` and `files.exclude`; `--no-ignore` bypasses those exclusions. Explicit filenames are always included. CLI configuration comes from the nearest ancestor `.bloblangrc.json` within the nearest Git project, or up to the filesystem root outside Git. Linting uses static analysis without samples or mapping execution.
+
+Exit status is `0` on success, `1` for warning/error diagnostics or formatting drift with `--check`, and `2` for usage, configuration, I/O or formatting syntax failures. Hints and informational diagnostics do not fail lint. See the [CLI reference](docs/cli.md) for stdin examples, safe fixes and configuration behavior.
+
 ## Build and package
 
 Requires Go 1.26.3+ and a C compiler. The grammar is pinned to a published Go module commit, so builds work from this repository alone. Tree-sitter's Go binding uses generated C; release binaries need no source checkout or compiler at runtime.
 
 ```sh
 go test ./...
+go build -a -o target/blobl ./cmd/blobl
 go build -a -o target/bloblang-lsp ./cmd/bloblang-lsp
 ```
 
 To develop against the sibling grammar, use `go mod edit -replace github.com/teyfix/tree-sitter-bloblang=../tree-sitter-bloblang` locally and remove that replacement before committing. Use `-a` after regenerating its grammar: the included `parser.c` lives outside the Go package directory and Go's normal package cache can miss the change.
 
-Tagged releases publish `bloblang-lsp-<os>-<arch>` binaries (`.exe` on Windows), matching `language-server-v<version>-<os>-<arch>` tar/ZIP archives, and `SHA256SUMS` for Linux, macOS and Windows on amd64 and arm64. The VS Code extension downloads and extracts the latest matching archive. The server binary itself is not compressed at runtime. A configured external binary can also be used for development.
+Tagged releases publish `blobl-<os>-<arch>` binaries (`.exe` on Windows) and `blobl-v<version>-<os>-<arch>` tar/ZIP archives for Linux, macOS and Windows on amd64 and arm64. CLI archives contain `blobl` or `blobl.exe`. The public [release manifest](https://github.com/teyfix/bloblang-lsp/releases/latest/download/blobl-release.json) supplies the stable release tag and its six raw binary filenames; installers download the selected asset from that exact tag without GitHub API access or authentication.
+
+Releases retain separate `bloblang-lsp-<os>-<arch>` binaries and `language-server-v<version>-<os>-<arch>` archives for older clients, plus the existing `SHA256SUMS` file covering binaries, archives and the manifest. Legacy server executables start LSP without a subcommand; `blobl` requires `lsp` to start the server. In VS Code, a custom `bloblang.server.path` pointing to `blobl` requires `bloblang.server.args: ["lsp"]`; a legacy server uses the default empty arguments.
+
+Task builds retain the legacy server as their default. Build a specific CLI target with:
+
+```sh
+VERSION=dev task build:cli:target OS=linux ARCH=amd64 BIN=blobl
+```
+
+`task build:cli` builds all six CLI targets; `task build` builds all six legacy server targets. Add `COMPRESS=true` for archives: CLI archives use the same stable `blobl`/`blobl.exe` member names as releases, while legacy archive members keep their versioned names. Cross-compiling with CGO requires a C compiler for the target platform.
 
 To verify a private mapping corpus without changing files:
 
@@ -119,11 +151,11 @@ To verify a private mapping corpus without changing files:
 BLOBLANG_CORPUS_LIST=/path/to/newline-delimited-files.txt go test ./internal/lsp -run TestFormatterCorpus -v
 ```
 
-The server implements full document sync, completion, hover, formatting, definition, references, diagnostics, inlay hints, code lenses and lint Quick Fixes. Both CLI entrypoints write logs to stderr and speak LSP on stdin/stdout. Workspace editor settings use `.bloblangrc.json` as shown below. Legacy server startup settings use the `.bloblangrc` base name with supported extensions (for example `.bloblangrc.yaml`) and `BLOBLANG_LSP_*` overrides; see [configuration](docs/core/settings.md). Startup settings require restarting and do not set preview print width.
+The server implements full document sync, completion, hover, formatting, definition, references, diagnostics, inlay hints, code lenses and lint Quick Fixes. `blobl lsp`, `bloblang-lsp` and the older `language-server` entrypoint write logs to stderr and speak LSP on stdin/stdout. Workspace editor settings use `.bloblangrc.json` as shown below. Legacy server startup settings use the `.bloblangrc` base name with supported extensions (for example `.bloblangrc.yaml`) and `BLOBLANG_LSP_*` overrides; see [configuration](docs/core/settings.md). Startup settings require restarting and do not set preview print width.
 
 ## Workspace formatting, previews and linting
 
-Each workspace root can contain `.bloblangrc.json`. Multi-root workspaces use the longest matching root; standalone documents use their parent directory. Edits, creation and deletion take effect without restarting. Invalid settings fall back to defaults and the bundled VS Code schema reports invalid keys or values.
+Each document uses the nearest ancestor `.bloblangrc.json`. In the editor, lookup stops at the deepest containing workspace root; loose documents and the CLI stop at the nearest Git project root, or the filesystem root outside Git. A nested configuration replaces ancestor settings. Edits, creation and deletion take effect without restarting. Invalid settings fall back to defaults in the editor, and the bundled VS Code schema reports invalid keys or values; CLI commands report invalid settings with exit status `2`.
 
 ```json
 {

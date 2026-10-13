@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf16"
 
@@ -187,7 +186,7 @@ func (h *Handler) importHintDiagnostics(uri protocol.DocumentURI, text string) [
 				if strings.HasPrefix(pathStr, `"""`) && strings.HasSuffix(pathStr, `"""`) {
 					pathStr = pathStr[3 : len(pathStr)-3]
 				}
-				resolved := filepath.Join(h.baseDirForURI(uri), pathStr)
+				resolved := h.resolveImportPath(uri, pathStr)
 				row := int(child.StartPosition().Row)
 				diagnostics = append(diagnostics, protocol.Diagnostic{
 					Range:    protocol.Range{Start: protocol.Position{Line: row, Character: 0}, End: protocol.Position{Line: row, Character: 0}},
@@ -210,26 +209,29 @@ func (h *Handler) importHintDiagnostics(uri protocol.DocumentURI, text string) [
 	return diagnostics
 }
 
+func (h *Handler) hasMappingCode(uri protocol.DocumentURI, text string) bool {
+	tree, err := h.parser.Parse(string(uri)+":diagnostic-code", text)
+	if err != nil || tree == nil {
+		return true
+	}
+	defer tree.Close()
+	for i := uint(0); i < tree.RootNode().NamedChildCount(); i++ {
+		if tree.RootNode().NamedChild(i).Kind() != "comment" {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Handler) diagnosticsText(uri protocol.DocumentURI, text string) []protocol.Diagnostic {
 	diagnostics := []protocol.Diagnostic{}
-	hasCode := true
-	if tree, e := h.parser.Parse(string(uri)+":diagnostic-code", text); e == nil && tree != nil {
-		hasCode = false
-		for i := uint(0); i < tree.RootNode().NamedChildCount(); i++ {
-			if tree.RootNode().NamedChild(i).Kind() != "comment" {
-				hasCode = true
-				break
-			}
-		}
-		tree.Close()
-	}
-	if text != "" && hasCode {
+	if text != "" && h.hasMappingCode(uri, text) {
 		preview, err := benthos.PreviewEnvironment(h.benv, h.getSample(uri))
 		if err != nil {
 			h.logger.Debug("preview environment setup failed", "err", err)
 			preview = h.benv
 		}
-		env := preview.WithCustomImporter(func(name string) ([]byte, error) { return os.ReadFile(filepath.Join(h.baseDirForURI(uri), name)) })
+		env := preview.WithCustomImporter(func(name string) ([]byte, error) { return os.ReadFile(h.resolveImportPath(uri, name)) })
 		if _, err := env.Parse(text); err != nil {
 			diagnostics = append(diagnostics, convertErrorToDiagnostics(text, err)...)
 		} else if sample := h.getSample(uri); sample != nil {

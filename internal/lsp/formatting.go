@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"go.yaml.in/yaml/v3"
 	"os"
-	"path/filepath"
 	"strings"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/teyfix/bloblang-lsp/internal/benthos"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -74,7 +74,11 @@ func (h *Handler) formatText(uri protocol.DocumentURI, text string, tabSize int)
 	if err != nil {
 		return text, false
 	}
-	env := preview.WithCustomImporter(func(name string) ([]byte, error) { return os.ReadFile(filepath.Join(h.baseDirForURI(uri), name)) })
+	env := preview.WithCustomImporter(func(name string) ([]byte, error) { return os.ReadFile(h.resolveImportPath(uri, name)) })
+	return h.formatTextWithEnvironment(uri, text, tabSize, env, h.workspaceConfig(uri).Formatter.PrintWidth)
+}
+
+func (h *Handler) formatTextWithEnvironment(uri protocol.DocumentURI, text string, tabSize int, env *bloblang.Environment, printWidth int) (string, bool) {
 	_, originalErr := env.Parse(text)
 	tree, err := h.parser.Parse(string(uri)+":format", text)
 	if err != nil || tree == nil {
@@ -110,7 +114,7 @@ func (h *Handler) formatText(uri protocol.DocumentURI, text string, tabSize int)
 	if tabSize > 8 {
 		tabSize = 8
 	}
-	result := renderLayout(nodeLayout(tree.RootNode(), []byte(text), tabSize), h.workspaceConfig(uri).Formatter.PrintWidth) + "\n"
+	result := renderLayout(nodeLayout(tree.RootNode(), []byte(text), tabSize), printWidth) + "\n"
 	check, checkErr := h.parser.Parse(string(uri)+":formatted", result)
 	if checkErr != nil || check == nil {
 		return text, false
@@ -170,13 +174,17 @@ func (h *Handler) Formatting(_ context.Context, p *protocol.DocumentFormattingPa
 	if !ok {
 		return []protocol.TextEdit{}, nil
 	}
-	if yamlDocument(p.TextDocument.URI) && !strings.Contains(string(p.TextDocument.URI), "#bloblang-") {
+	return formatDocument(p.TextDocument.URI, text, p.Options.TabSize, h.formatText), nil
+}
+
+func formatDocument(uri protocol.DocumentURI, text string, tabSize int, format func(protocol.DocumentURI, string, int) (string, bool)) []protocol.TextEdit {
+	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
 		var edits []protocol.TextEdit
-		for _, r := range h.regions(p.TextDocument.URI) {
+		for _, r := range extractRegions(uri, text) {
 			if r.interpolation {
 				continue
 			}
-			formatted, valid := h.formatText(r.uri, r.text, p.Options.TabSize)
+			formatted, valid := format(r.uri, r.text, tabSize)
 			if !valid || formatted == r.text {
 				continue
 			}
@@ -219,11 +227,11 @@ func (h *Handler) Formatting(_ context.Context, p *protocol.DocumentFormattingPa
 			}
 			edits = append(edits, protocol.TextEdit{Range: protocol.Range{Start: bytePosition(text, r.start), End: bytePosition(text, r.end)}, NewText: replacement})
 		}
-		return edits, nil
+		return edits
 	}
-	formatted, valid := h.formatText(p.TextDocument.URI, text, p.Options.TabSize)
+	formatted, valid := format(uri, text, tabSize)
 	if !valid || formatted == text {
-		return []protocol.TextEdit{}, nil
+		return []protocol.TextEdit{}
 	}
-	return []protocol.TextEdit{{Range: protocol.Range{Start: protocol.Position{}, End: bytePosition(text, len(text))}, NewText: formatted}}, nil
+	return []protocol.TextEdit{{Range: protocol.Range{Start: protocol.Position{}, End: bytePosition(text, len(text))}, NewText: formatted}}
 }

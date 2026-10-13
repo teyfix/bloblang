@@ -60,6 +60,10 @@ type Config struct {
 		Enabled bool                   `json:"enabled"`
 		Rules   map[string]RuleSetting `json:"rules"`
 	} `json:"lint"`
+	Files struct {
+		Exclude          []string `json:"exclude"`
+		RespectGitignore bool     `json:"respectGitignore"`
+	} `json:"files"`
 	Schema string `json:"$schema,omitempty"`
 }
 
@@ -69,6 +73,8 @@ func Default() Config {
 	c.Preview.Format = "yaml"
 	c.Lint.Enabled = true
 	c.Lint.Rules = map[string]RuleSetting{}
+	c.Files.Exclude = []string{}
+	c.Files.RespectGitignore = true
 	return c
 }
 func ValidSeverity(s string) bool {
@@ -101,6 +107,11 @@ func Load(path string) (Config, error) {
 	}
 	if c.Preview.Format != "yaml" && c.Preview.Format != "json" {
 		return Default(), fmt.Errorf("preview.format must be yaml or json")
+	}
+	for _, pattern := range c.Files.Exclude {
+		if strings.TrimSpace(pattern) == "" {
+			return Default(), fmt.Errorf("files.exclude patterns must not be empty")
+		}
 	}
 	for id, r := range c.Lint.Rules {
 		known := false
@@ -145,7 +156,10 @@ func Schema() map[string]any {
 	object := func(p map[string]any) map[string]any {
 		return map[string]any{"type": "object", "additionalProperties": false, "properties": p}
 	}
-	s := object(map[string]any{"$schema": map[string]any{"type": "string"}, "formatter": object(map[string]any{"printWidth": map[string]any{"type": "integer", "minimum": 20, "maximum": 1000, "default": 80}}), "preview": object(map[string]any{"format": map[string]any{"type": "string", "enum": []string{"yaml", "json"}, "default": "yaml"}}), "lint": object(map[string]any{"enabled": map[string]any{"type": "boolean", "default": true}, "rules": object(props)})})
+	s := object(map[string]any{"$schema": map[string]any{"type": "string"}, "formatter": object(map[string]any{"printWidth": map[string]any{"type": "integer", "minimum": 20, "maximum": 1000, "default": 80}}), "preview": object(map[string]any{"format": map[string]any{"type": "string", "enum": []string{"yaml", "json"}, "default": "yaml"}}), "lint": object(map[string]any{"enabled": map[string]any{"type": "boolean", "default": true}, "rules": object(props)}), "files": object(map[string]any{
+		"exclude":          map[string]any{"type": "array", "items": map[string]any{"type": "string", "minLength": 1}, "default": []string{}, "description": "Gitignore-style patterns relative to this configuration file's directory, with ! negation. Applied to CLI directory and glob scans; explicit filenames bypass exclusions."},
+		"respectGitignore": map[string]any{"type": "boolean", "default": true, "description": "Honor .gitignore during CLI directory and glob scans. .bloblangignore and files.exclude remain active; explicit filenames bypass exclusions."},
+	})})
 	s["$schema"] = "http://json-schema.org/draft-07/schema#"
 	s["title"] = "Bloblang workspace configuration"
 	return s

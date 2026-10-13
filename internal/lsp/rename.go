@@ -324,7 +324,7 @@ func (h *Handler) mapNameExists(uri protocol.DocumentURI, text, name string, see
 		if path == nil {
 			return
 		}
-		imported := fileURI(h.resolveMappingPath(uri, strings.Trim(path.Utf8Text([]byte(text)), "\"`")))
+		imported := fileURI(h.resolveImportPath(uri, strings.Trim(path.Utf8Text([]byte(text)), "\"`")))
 		source, err := h.navigationText(imported)
 		if err != nil || h.mapNameExists(imported, source, name, seen) {
 			collision = true

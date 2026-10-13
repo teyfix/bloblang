@@ -3,6 +3,8 @@ module github.com/teyfix/bloblang-lsp
 go 1.26.3
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.3
+	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/dustin/go-humanize v1.0.1
 	github.com/owenrumney/go-lsp v0.2.5
 	github.com/redpanda-data/benthos/v4 v4.73.0
@@ -40,6 +42,7 @@ require (
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
+	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect

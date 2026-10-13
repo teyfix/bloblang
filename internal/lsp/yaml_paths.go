@@ -4,7 +4,6 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"go.yaml.in/yaml/v3"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -58,20 +57,7 @@ func yamlPaths(text string) []yamlPath {
 	return out
 }
 func (h *Handler) resolveMappingPath(uri protocol.DocumentURI, path string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-	local := filepath.Join(h.baseDirForURI(uri), path)
-	if _, err := os.Stat(local); err == nil {
-		return local
-	}
-	if h.workspaceRoot != "" {
-		workspace := filepath.Join(h.workspaceRoot, path)
-		if _, err := os.Stat(workspace); err == nil {
-			return workspace
-		}
-	}
-	return local
+	return h.sourceContext(uri).MappingPath(path)
 }
 func (h *Handler) yamlPathDefinition(uri protocol.DocumentURI, text string, p protocol.Position) []protocol.Location {
 	offset := positionByte(text, p)

@@ -2,6 +2,8 @@
 
 The AST linter supports the seven slash-separated IDs in the [generated rule reference](lint-rules.md). All keys remain flat under `lint.rules`, which gives JSON completion the full rule names while retaining a visible namespace hierarchy.
 
+Run the same static analysis outside an editor with `blobl lint` on files, directories or stdin. `blobl lint --fix` applies available safe fixes to files and reports the diagnostics that remain. Warnings and errors return exit status `1`; hints and informational findings do not. CLI lint does not load samples or execute mappings. See the [CLI reference](../cli.md) for configuration, JSON output and stdin handling.
+
 ```json
 {
   "lint": {

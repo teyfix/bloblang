@@ -3,29 +3,24 @@ package lsp
 import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
-	"path/filepath"
-	"strings"
 )
+
+func (h *Handler) sourceContext(uri protocol.DocumentURI) editorconfig.SourceContext {
+	roots := append([]string(nil), h.workspaceRoots...)
+	if h.workspaceRoot != "" {
+		roots = append(roots, h.workspaceRoot)
+	}
+	return editorconfig.ResolveSource(h.baseDirForURI(uri), roots)
+}
+
+func (h *Handler) resolveImportPath(uri protocol.DocumentURI, path string) string {
+	return (editorconfig.SourceContext{Dir: h.baseDirForURI(uri)}).ImportPath(path)
+}
 
 // Read on demand, so edits, creations and deletions take effect without restarting.
 func (h *Handler) workspaceConfig(uri protocol.DocumentURI) editorconfig.Config {
-	dir := h.baseDirForURI(uri)
-	best := ""
-	for _, root := range h.workspaceRoots {
-		if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
-			if len(root) > len(best) {
-				best = root
-			}
-		}
-	}
-	if best == "" {
-		best = h.workspaceRoot
-	}
-	if best == "" {
-		best = dir
-	}
-	c, err := editorconfig.Load(filepath.Join(best, ".bloblangrc.json"))
-	if err != nil {
+	c, err := h.sourceContext(uri).Config()
+	if err != nil && h.logger != nil {
 		h.logger.Debug("invalid workspace configuration", "error", err)
 	}
 	return c

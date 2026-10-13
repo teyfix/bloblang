@@ -35,28 +35,64 @@ tasks:
       - sh: test -n "{{.ARCH}}"
         msg: Required build variable ARCH is not set
     vars:
+      PACKAGE: '{{default "./cmd/bloblang-lsp" .PACKAGE}}'
       BIN: '{{default (printf "language-server-%s-%s-%s" .VERSION .OS .ARCH) .BIN}}'
       EXT: '{{if eq .OS "windows"}}.exe{{end}}'
       COMPRESS: '{{ default "false" .COMPRESS }}'
     cmds:
-      - cmd: "GOOS={{.OS}} GOARCH={{.ARCH}} {{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/{{.BIN}}{{.EXT}} ./cmd/bloblang-lsp/main.go"
+      - cmd: "GOOS={{.OS}} GOARCH={{.ARCH}} {{.GO_BUILD_CMD}} -o {{.TARGET_DIR}}/{{.BIN}}{{.EXT}} {{.PACKAGE}}"
       - if: '{{ eq .COMPRESS "true" }}'
         task: build:compress
         vars:
           OS: "{{.OS}}"
           EXT: "{{.EXT}}"
           BIN: "{{.BIN}}"
+          ARCHIVE_BIN: '{{default .BIN .ARCHIVE_BIN}}'
+
+  build:cli:
+    desc: Build blobl CLI for all supported platforms
+    vars:
+      COMPRESS: '{{ default "false" .COMPRESS }}'
+    deps:
+      - for: { matrix: { OS: [linux, darwin, windows], ARCH: [amd64, arm64] } }
+        task: build:cli:target
+        vars:
+          OS: "{{.ITEM.OS}}"
+          ARCH: "{{.ITEM.ARCH}}"
+          COMPRESS: '{{ .COMPRESS }}'
+
+  build:cli:target:
+    desc: Build blobl CLI for a specific OS and architecture
+    vars:
+      BIN: '{{default (printf "blobl-%s-%s-%s" .VERSION .OS .ARCH) .BIN}}'
+    cmds:
+      - task: build:target
+        vars:
+          OS: "{{.OS}}"
+          ARCH: "{{.ARCH}}"
+          PACKAGE: ./cmd/blobl
+          BIN: "{{.BIN}}"
+          ARCHIVE_BIN: blobl
+          COMPRESS: '{{ default "false" .COMPRESS }}'
 
   build:compress:
-    desc: Compress language server
+    desc: Compress a built binary
     preconditions:
       - sh: test -n "{{.OS}}"
         msg: Required variable OS is not set
       - sh: test -n "{{.BIN}}"
         msg: Required variable BIN is not set
+    vars:
+      ARCHIVE_BIN: '{{default .BIN .ARCHIVE_BIN}}'
     cmds:
-      - if: '{{ eq .OS "windows" }}'
-        cmd: zip -qj {{.TARGET_DIR}}/{{.BIN}}.zip {{.TARGET_DIR}}/{{.BIN}}{{.EXT}}
-      - if: '{{ ne .OS "windows" }}'
-        cmd: tar -czf {{.TARGET_DIR}}/{{.BIN}}.tar.gz -C {{.TARGET_DIR}} {{.BIN}}
-      - cmd: rm -f {{.TARGET_DIR}}/{{.BIN}}{{.EXT}}
+      - cmd: |
+          archive_dir=$(mktemp -d)
+          trap 'rm -rf "$archive_dir"' EXIT
+          cp "{{.TARGET_DIR}}/{{.BIN}}{{.EXT}}" "$archive_dir/{{.ARCHIVE_BIN}}{{.EXT}}"
+          if [ "{{.OS}}" = windows ]; then
+            zip -qj "{{.TARGET_DIR}}/{{.BIN}}.zip" "$archive_dir/{{.ARCHIVE_BIN}}{{.EXT}}"
+          else
+            chmod 755 "$archive_dir/{{.ARCHIVE_BIN}}"
+            tar -czf "{{.TARGET_DIR}}/{{.BIN}}.tar.gz" -C "$archive_dir" "{{.ARCHIVE_BIN}}"
+          fi
+          rm -f "{{.TARGET_DIR}}/{{.BIN}}{{.EXT}}"

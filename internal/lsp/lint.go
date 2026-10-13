@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	protocol "github.com/owenrumney/go-lsp/lsp"
+	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"go.yaml.in/yaml/v3"
@@ -86,7 +87,10 @@ func pureExpression(n *tree_sitter.Node) bool {
 	return false
 }
 func (h *Handler) lintFindings(uri protocol.DocumentURI, text string) []lintFinding {
-	cfg := h.workspaceConfig(uri)
+	return h.lintFindingsWithConfig(uri, text, h.workspaceConfig(uri))
+}
+
+func (h *Handler) lintFindingsWithConfig(uri protocol.DocumentURI, text string, cfg editorconfig.Config) []lintFinding {
 	if !cfg.Lint.Enabled {
 		return nil
 	}

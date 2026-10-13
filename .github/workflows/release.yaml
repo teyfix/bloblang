@@ -65,19 +65,23 @@ jobs:
         if: matrix.os != 'windows' || matrix.arch != 'arm64'
         run: go test ./...
 
-      - name: Build release binary
+      - name: Build release binaries
         run: |
           if [ "${{ matrix.os }}" = linux ]; then
             task build:target OS=${{ matrix.os }} ARCH=${{ matrix.arch }} COMPRESS=false BIN=bloblang-lsp-${{ matrix.os }}-${{ matrix.arch }} GO_TAGS=netgo,osusergo LD_FLAGS="-w -s -linkmode external -extldflags -static"
+            task build:cli:target OS=${{ matrix.os }} ARCH=${{ matrix.arch }} COMPRESS=false BIN=blobl-${{ matrix.os }}-${{ matrix.arch }} GO_TAGS=netgo,osusergo LD_FLAGS="-w -s -linkmode external -extldflags -static"
           else
             task build:target OS=${{ matrix.os }} ARCH=${{ matrix.arch }} COMPRESS=false BIN=bloblang-lsp-${{ matrix.os }}-${{ matrix.arch }}
+            task build:cli:target OS=${{ matrix.os }} ARCH=${{ matrix.arch }} COMPRESS=false BIN=blobl-${{ matrix.os }}-${{ matrix.arch }}
           fi
 
-      - name: Upload binary
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: bloblang-lsp-${{ matrix.os }}-${{ matrix.arch }}
-          path: target/bloblang-lsp-*
+          path: |
+            target/bloblang-lsp-*
+            target/blobl-*
           if-no-files-found: error
 
   release:
@@ -94,32 +98,67 @@ jobs:
           path: target
           merge-multiple: true
 
-      - name: Package archives for extension downloads
+      - name: Generate public CLI release manifest
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["VERSION"]
+          if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
+              raise SystemExit("VERSION must be a stable release tag such as v0.3.0")
+          assets = {
+              f"{platform}-{arch}": f"blobl-{platform}-{arch}" + (".exe" if platform == "windows" else "")
+              for platform in ("linux", "darwin", "windows")
+              for arch in ("amd64", "arm64")
+          }
+          for name in assets.values():
+              if not pathlib.Path("target", name).is_file():
+                  raise SystemExit(f"Missing CLI release binary: {name}")
+          manifest = {"schemaVersion": 1, "version": version, "assets": assets}
+          pathlib.Path("target/blobl-release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Package CLI and extension archives
         run: |
           cd target
+          mkdir cli-package
           for os in linux darwin windows; do
             for arch in amd64 arm64; do
               binary="bloblang-lsp-${os}-${arch}"
               legacy="language-server-${VERSION}-${os}-${arch}"
+              cli="blobl-${os}-${arch}"
+              cli_archive="blobl-${VERSION}-${os}-${arch}"
               if [ "$os" = windows ]; then
                 cp "${binary}.exe" "${legacy}.exe"
                 zip -q "${legacy}.zip" "${legacy}.exe"
                 rm "${legacy}.exe"
+                cp "${cli}.exe" cli-package/blobl.exe
+                zip -qj "${cli_archive}.zip" cli-package/blobl.exe
+                rm cli-package/blobl.exe
               else
                 cp "$binary" "$legacy"
                 chmod 755 "$legacy"
                 tar -czf "${legacy}.tar.gz" "$legacy"
                 rm "$legacy"
+                cp "$cli" cli-package/blobl
+                chmod 755 cli-package/blobl
+                tar -czf "${cli_archive}.tar.gz" -C cli-package blobl
+                rm cli-package/blobl
               fi
             done
           done
+          rmdir cli-package
 
       - name: Generate checksums
         run: |
           cd target
           test "$(find . -maxdepth 1 -type f -name 'bloblang-lsp-*' | wc -l)" -eq 6
           test "$(find . -maxdepth 1 -type f -name 'language-server-*' | wc -l)" -eq 6
-          sha256sum bloblang-lsp-* language-server-* > SHA256SUMS
+          test "$(find . -maxdepth 1 -type f -name 'blobl-*' | wc -l)" -eq 13
+          sha256sum bloblang-lsp-* language-server-* blobl-* > SHA256SUMS
           sha256sum --check SHA256SUMS
 
       - name: Create release

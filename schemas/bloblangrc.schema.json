@@ -5,6 +5,26 @@
     "$schema": {
       "type": "string"
     },
+    "files": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "default": [],
+          "description": "Gitignore-style patterns relative to this configuration file's directory, with ! negation. Applied to CLI directory and glob scans; explicit filenames bypass exclusions.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "respectGitignore": {
+          "default": true,
+          "description": "Honor .gitignore during CLI directory and glob scans. .bloblangignore and files.exclude remain active; explicit filenames bypass exclusions.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
     "formatter": {
       "additionalProperties": false,
       "properties": {
