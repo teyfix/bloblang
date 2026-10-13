@@ -118,6 +118,22 @@ func TestRunMappingCommandErrorIsStructured(t *testing.T) {
 	assert.Equal(t, "execute", result.Error.Kind)
 }
 
+func TestRunMappingCommandLintSetupErrorFails(t *testing.T) {
+	useDirectMappingRunner(t)
+	executeMapping = func(context.Context, mapping.Request) mapping.Result {
+		return mapping.Result{Output: "valid", LintError: &mapping.Error{Kind: "config", Message: "invalid configuration"}}
+	}
+	var out, errOut bytes.Buffer
+	exit := runMappingCommand(context.Background(), []string{"--source", `root = "valid"`, "--input", "null"}, strings.NewReader(""), &out, &errOut)
+	require.Equal(t, 1, exit)
+	assert.Empty(t, errOut.String())
+	var result mapping.Result
+	require.NoError(t, json.Unmarshal(out.Bytes(), &result))
+	assert.Equal(t, "valid", result.Output)
+	require.NotNil(t, result.LintError)
+	assert.Equal(t, "config", result.LintError.Kind)
+}
+
 func TestRunFixtureCommand(t *testing.T) {
 	useDirectMappingRunner(t)
 	suite := `source: root = this.uppercase()

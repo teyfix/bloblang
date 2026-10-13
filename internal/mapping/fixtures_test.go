@@ -194,6 +194,30 @@ func TestRunSuiteCancellation(t *testing.T) {
 	}
 }
 
+func TestRunSuiteFailsOnLintSetupErrors(t *testing.T) {
+	suite, err := ParseSuite([]byte(`{"source":"root = this","cases":[{"name":"matching output","request":{"input":null},"expect":{"output":null}},{"name":"expected execution failure","request":{"input":null},"expect":{"error":{"kind":"execute"}}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := 0
+	results, err := RunSuite(context.Background(), suite, func(context.Context, Request) Result {
+		result := Result{LintError: &Error{Kind: "config", Message: "invalid project configuration"}}
+		if index == 1 {
+			result.Error = &Error{Kind: "execute", Message: "expected"}
+		}
+		index++
+		return result
+	})
+	if err != nil || results.Passed != 0 || results.Failed != 2 {
+		t.Fatalf("expected lint errors to fail every fixture: %+v, %v", results, err)
+	}
+	for _, result := range results.Cases {
+		if len(result.Failures) != 1 || !strings.Contains(result.Failures[0], "lint failed (config)") {
+			t.Fatalf("missing lint setup failure: %+v", result)
+		}
+	}
+}
+
 func TestFixtureComparisonPreservesNumbersAndObjectKeys(t *testing.T) {
 	for _, pair := range [][2]json.RawMessage{
 		{json.RawMessage(`{"a":[1,2e2,9007199254740993]}`), json.RawMessage(`{"a":[1.0,200.0,9007199254740993]}`)},

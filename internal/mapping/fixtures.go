@@ -31,7 +31,8 @@ type FixtureCase struct {
 
 // Expectation checks only explicitly provided fields. Output:null asserts a
 // JSON null output. Metadata checks the entire map, including an empty map.
-// Errors are unexpected unless Error is provided.
+// Errors are unexpected unless Error is provided. Lint setup failures always
+// fail the case, including when its output and expected execution error match.
 type Expectation struct {
 	Output   json.RawMessage `json:"output,omitempty"`
 	Metadata map[string]any  `json:"metadata,omitempty"`
@@ -188,6 +189,9 @@ func mergeFixtureMaps(defaults, overrides map[string]string) map[string]string {
 
 func (e Expectation) check(result Result) []string {
 	var failures []string
+	if result.LintError != nil {
+		failures = append(failures, fmt.Sprintf("lint failed (%s): %s", result.LintError.Kind, result.LintError.Message))
+	}
 	if e.Error == nil && result.Error != nil {
 		failures = append(failures, fmt.Sprintf("unexpected error (%s): %s", result.Error.Kind, result.Error.Message))
 	} else if e.Error != nil {
