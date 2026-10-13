@@ -189,7 +189,14 @@ func (t *Tooling) findings(uri protocol.DocumentURI, text string, cfg editorconf
 			// Match the editor's safe quick-fix restrictions: escaped/folded
 			// scalars need reconstruction, and advisories have no replacement.
 			if finding.replacement != "" && (region == nil || region.style == 0 || region.style&yaml.LiteralStyle != 0) {
-				edits = append(edits, protocol.TextEdit{Range: diagnostic.Range, NewText: finding.replacement})
+				edit := protocol.TextEdit{Range: diagnostic.Range, NewText: finding.replacement}
+				valid := true
+				if region != nil {
+					edit, valid = region.sourceEdit(text, finding.diagnostic.Range, finding.replacement)
+				}
+				if valid {
+					edits = append(edits, edit)
+				}
 			}
 		}
 	}

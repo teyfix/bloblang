@@ -67,6 +67,10 @@ func layoutPrefixWidth(d layout) (int, bool) {
 }
 
 func renderLayout(d layout, width int) string {
+	return renderLayoutLineEnding(d, width, "\n")
+}
+
+func renderLayoutLineEnding(d layout, width int, eol string) string {
 	var b strings.Builder
 	column := 0
 	var render func(layout, int, bool, int)
@@ -84,7 +88,7 @@ func renderLayout(d layout, width int) string {
 				b.WriteString(d.text)
 				column += utf8.RuneCountInString(d.text)
 			} else {
-				b.WriteByte('\n')
+				b.WriteString(eol)
 				b.WriteString(strings.Repeat(" ", indent))
 				column = indent
 			}
@@ -125,7 +129,12 @@ func edgeTokens(n *tree_sitter.Node, source []byte) (string, string) {
 	return ts[0].text, ts[len(ts)-1].text
 }
 func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
-	if n.ChildCount() == 0 || n.Kind() == "string" || n.Kind() == "comment" || n.Kind() == "number" {
+	if n.Kind() == "comment" {
+		// Tree-sitter includes the CR of a CRLF in the line-comment token;
+		// the renderer supplies the complete line ending exactly once.
+		return literal(strings.TrimSuffix(n.Utf8Text(source), "\r"))
+	}
+	if n.ChildCount() == 0 || n.Kind() == "string" || n.Kind() == "number" {
 		return literal(n.Utf8Text(source))
 	}
 	if n.Kind() == "method_call" {
@@ -156,7 +165,11 @@ func nodeLayout(n *tree_sitter.Node, source []byte, size int) layout {
 			first, _ := edgeTokens(c, source)
 			gap := string(source[prev.EndByte():c.StartByte()])
 			separator := literal("")
-			if kind == "source" {
+			if c.Kind() == "comment" && !strings.Contains(gap, "\n") {
+				// Keep end-of-line comments attached to their original statement
+				// or collection member even when the enclosing group expands.
+				separator = literal(" ")
+			} else if kind == "source" {
 				separator = hardline()
 				if strings.Count(gap, "\n") > 1 {
 					separator = concat(hardline(), hardline())
@@ -320,7 +333,7 @@ func chainLayout(n *tree_sitter.Node, source []byte, size int) layout {
 		for j := uint(0); j < call.ChildCount(); j++ {
 			c := call.Child(j)
 			if c.Kind() == "comment" && c.StartByte() >= object.EndByte() && c.EndByte() <= method.StartByte() {
-				comments = append(comments, hardline(), literal(c.Utf8Text(source)))
+				comments = append(comments, hardline(), nodeLayout(c, source, size))
 			}
 		}
 		if len(comments) > 0 {

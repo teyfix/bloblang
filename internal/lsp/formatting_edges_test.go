@@ -250,8 +250,8 @@ func TestFormattingCollectionCommasAndComments(t *testing.T) {
 		{"array", "root = [1, 2,]\n", "root = [1, 2]\n"},
 		{"nested inline collections", "root = {a: [1, 2,], b: {c: 3,},}\n", "root = { a: [1, 2], b: { c: 3 } }\n"},
 		{"call comma retained", "root = this.with(\"a\",)\n", "root = this.with(\"a\",)\n"},
-		{"object final comment", "root = {a: 1, # keep\n}\n", "root = {\n  a: 1,\n  # keep\n}\n"},
-		{"array final comment", "root = [1, # keep\n]\n", "root = [\n  1,\n  # keep\n]\n"},
+		{"object final comment", "root = {a: 1, # keep\n}\n", "root = {\n  a: 1, # keep\n}\n"},
+		{"array final comment", "root = [1, # keep\n]\n", "root = [\n  1, # keep\n]\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, uri := featureHandler(t)
@@ -323,7 +323,10 @@ func TestFormattingHuggedArgumentWidths(t *testing.T) {
 					require.True(t, ok, got)
 					require.Equal(t, got, twice, input)
 					for _, line := range strings.Split(got, "\n") {
-						require.LessOrEqual(t, utf8.RuneCountInString(line), width, got)
+						// An attached comment may exceed the preferred width; moving
+						// it after its node changes what it appears to document.
+						code := strings.SplitN(line, " #", 2)[0]
+						require.LessOrEqual(t, utf8.RuneCountInString(code), width, got)
 					}
 					_, err := h.benv.Parse(got)
 					require.NoError(t, err, got)
