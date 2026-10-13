@@ -82,6 +82,10 @@ func (u renameUnit) location(s *symbol) protocol.Location {
 }
 
 func (h *Handler) renameUnits(uri protocol.DocumentURI, text string) []renameUnit {
+	return h.navigationUnits(uri, text, false)
+}
+
+func (h *Handler) navigationUnits(uri protocol.DocumentURI, text string, allowErrors bool) []renameUnit {
 	var units []renameUnit
 	if yamlDocument(uri) {
 		for _, region := range extractRegions(uri, text) {
@@ -93,7 +97,7 @@ func (h *Handler) renameUnits(uri protocol.DocumentURI, text string) []renameUni
 	for i := range units {
 		u := &units[i]
 		u.tree, _ = h.parser.Parse(string(u.uri)+":rename", u.text)
-		if u.tree != nil && !u.tree.RootNode().HasError() {
+		if u.tree != nil && (allowErrors || !u.tree.RootNode().HasError()) {
 			u.symbols = symbols(u.tree.RootNode(), u.text)
 		}
 	}
@@ -107,11 +111,15 @@ func closeRenameUnits(units []renameUnit) {
 	}
 }
 func (h *Handler) renameTarget(p protocol.TextDocumentPositionParams) ([]renameUnit, int, *symbol) {
+	return h.navigationTarget(p, false)
+}
+
+func (h *Handler) navigationTarget(p protocol.TextDocumentPositionParams, allowErrors bool) ([]renameUnit, int, *symbol) {
 	text, err := h.navigationText(p.TextDocument.URI)
 	if err != nil {
 		return nil, 0, nil
 	}
-	units := h.renameUnits(p.TextDocument.URI, text)
+	units := h.navigationUnits(p.TextDocument.URI, text, allowErrors)
 	for i := range units {
 		u := &units[i]
 		pos := p.Position
