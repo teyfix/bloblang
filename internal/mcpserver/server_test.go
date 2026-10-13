@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/teyfix/bloblang-lsp/internal/help"
 	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang-lsp/internal/schema"
 )
 
 func connect(t *testing.T, options Options) *mcp.ClientSession {
@@ -75,7 +76,7 @@ func TestToolDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"bloblang_run": true, "bloblang_lint": true, "bloblang_format": true, "bloblang_search": true, "bloblang_docs": true}
+	want := map[string]bool{"bloblang_run": true, "bloblang_lint": true, "bloblang_format": true, "bloblang_search": true, "bloblang_docs": true, "bloblang_schema": true}
 	for _, tool := range tools.Tools {
 		if !want[tool.Name] {
 			t.Fatalf("unexpected tool %s", tool.Name)
@@ -85,6 +86,9 @@ func TestToolDiscovery(t *testing.T) {
 			t.Fatalf("missing local/read-only annotations: %+v", tool)
 		}
 		if tool.Name == "bloblang_run" {
+			if tool.Annotations.IdempotentHint {
+				t.Fatal("evaluation can use random and clock functions")
+			}
 			schema := tool.InputSchema.(map[string]any)
 			properties := schema["properties"].(map[string]any)
 			if len(properties["input"].(map[string]any)) != 0 || len(properties["root"].(map[string]any)) != 0 {
@@ -173,18 +177,65 @@ func TestToolArgumentValidation(t *testing.T) {
 			t.Fatal("conflicting source inputs accepted")
 		}
 	}
-	if result := call(t, client, "bloblang_format", map[string]any{"source": "root=this", "tabSize": 17}); !result.IsError {
+	if result := call(t, client, "bloblang_format", map[string]any{"source": "root=this", "tabSize": 9}); !result.IsError {
 		t.Fatal("invalid tabSize accepted")
 	}
 }
 
 func TestRunErrors(t *testing.T) {
+	for _, result := range []mapping.Result{
+		{Metadata: map[string]any{}, Error: &mapping.Error{Kind: "parse", Message: "invalid mapping"}},
+		{Metadata: map[string]any{}, LintError: &mapping.Error{Kind: "lint", Message: "invalid lint configuration"}},
+	} {
+		client := connect(t, Options{Run: func(context.Context, mapping.Request) (any, error) { return result, nil }})
+		response := call(t, client, "bloblang_run", map[string]any{"source": "root = (", "input": nil})
+		if !response.IsError || response.StructuredContent == nil || len(response.Content) == 0 {
+			t.Fatalf("execution/lint errors must preserve structured result and mark isError: %+v", response)
+		}
+	}
+}
+
+func TestSampleSchema(t *testing.T) {
 	client := connect(t, Options{Run: func(context.Context, mapping.Request) (any, error) {
-		return mapping.Result{Metadata: map[string]any{}, Error: &mapping.Error{Kind: "parse", Message: "invalid mapping"}}, nil
+		t.Error("schema tool must not execute mappings")
+		return nil, nil
 	}})
-	result := call(t, client, "bloblang_run", map[string]any{"source": "root = (", "input": nil})
-	if !result.IsError || result.StructuredContent == nil || len(result.Content) == 0 {
-		t.Fatalf("execution errors must preserve structured result and mark isError: %+v", result)
+	result := decode[schema.Result](t, call(t, client, "bloblang_schema", map[string]any{
+		"input": map[string]any{"name": "Ada", "tags": map[string]int{"a": 1, "b": 2}}, "mapPaths": []string{"/tags"},
+	}))
+	var inferred map[string]any
+	if err := json.Unmarshal(result.Schema, &inferred); err != nil {
+		t.Fatal(err)
+	}
+	properties, ok := inferred["properties"].(map[string]any)
+	if !ok || properties["tags"].(map[string]any)["values"] == nil {
+		t.Fatalf("missing JTD object/map schema: %s", result.Schema)
+	}
+	if result.Meta.Format != "jtd" || !result.Meta.SampleBased || result.Meta.EnumInference || len(result.Meta.Warnings) == 0 {
+		t.Fatalf("missing inference caveats: %+v", result.Meta)
+	}
+	path := filepath.Join(t.TempDir(), "large.json")
+	if err := os.WriteFile(path, []byte(`{"name":"`+strings.Repeat("x", 120_000)+`"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fileResult := decode[schema.Result](t, call(t, client, "bloblang_schema", map[string]any{"inputPath": path}))
+	if !strings.Contains(string(fileResult.Schema), `"string"`) {
+		t.Fatalf("missing large file schema: %s", fileResult.Schema)
+	}
+	samplePath := filepath.Join(t.TempDir(), "sample.yaml")
+	if err := os.WriteFile(samplePath, []byte("$bloblang:\n  input:\n    title: Example\n  meta:\n    topic: ignored\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	sampleResult := decode[schema.Result](t, call(t, client, "bloblang_schema", map[string]any{"samplePath": samplePath}))
+	if !strings.Contains(string(sampleResult.Schema), "title") || strings.Contains(string(sampleResult.Schema), "topic") {
+		t.Fatalf("wrong sample envelope field inferred: %s", sampleResult.Schema)
+	}
+	for _, arguments := range []map[string]any{
+		{}, {"input": nil, "inputPath": path}, {"input": nil, "mapPaths": []string{"invalid"}}, {"input": nil, "enumInference": true},
+	} {
+		if response := call(t, client, "bloblang_schema", arguments); !response.IsError {
+			t.Fatalf("invalid schema arguments accepted: %+v", arguments)
+		}
 	}
 }
 

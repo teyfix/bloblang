@@ -62,7 +62,7 @@ func sourceSchema(format bool) map[string]any {
 		"imports":     importsSchema(),
 	}
 	if format {
-		properties["tabSize"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 16}
+		properties["tabSize"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 8}
 	}
 	schema := object(properties)
 	schema["oneOf"] = exclusiveRequired("source", "mappingPath")
