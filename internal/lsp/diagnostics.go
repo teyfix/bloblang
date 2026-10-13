@@ -56,7 +56,7 @@ func (h *Handler) validateDocument(ctx context.Context, uri protocol.DocumentURI
 		return // Stale validation run or document was closed!
 	}
 
-	h.publishDiagnostics(ctx, uri, diagnostics)
+	h.publishDiagnostics(ctx, uri, diagnostics, version)
 	h.mu.Unlock()
 	if h.validationHook != nil {
 		h.validationHook(uri, diagnostics)
@@ -144,7 +144,7 @@ func convertErrorToDiagnostics(text string, err error) []protocol.Diagnostic {
 	}}
 }
 
-func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []protocol.Diagnostic) {
+func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentURI, diagnostics []protocol.Diagnostic, generation ...uint64) {
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
 	}
@@ -161,9 +161,7 @@ func (h *Handler) publishDiagnostics(ctx context.Context, uri protocol.DocumentU
 	if h.client == nil {
 		return
 	}
-	if err := h.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{URI: uri, Diagnostics: merged}); err != nil {
-		h.logger.Debug("publish diagnostics failed", "uri", uri, "err", err)
-	}
+	h.enqueueDiagnostics(uri, merged, generation...)
 }
 
 func uriToPath(uri protocol.DocumentURI) (string, error) {

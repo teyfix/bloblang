@@ -35,7 +35,6 @@ type executionCache struct {
 	pending map[executionKey]*executionFlight
 	lru     list.List
 	bytes   int
-	epoch   uint64
 }
 
 func cloneResult(result *PartialResult) *PartialResult {
@@ -99,7 +98,6 @@ func (e *Executor) cachedExecution(ctx context.Context, uri string, sample *Samp
 		}
 		flight := &executionFlight{done: make(chan struct{})}
 		c.pending[key] = flight
-		epoch := c.epoch
 		c.mu.Unlock()
 		result, execErr := execute()
 		if ctx.Err() != nil {
@@ -119,11 +117,12 @@ func (e *Executor) cachedExecution(ctx context.Context, uri string, sample *Samp
 			size += len(execErr.Error())
 		}
 		c.mu.Lock()
-		if c.pending[key] == flight {
+		currentFlight := c.pending[key] == flight
+		if currentFlight {
 			delete(c.pending, key)
 		}
 		// Invalidating while a function is running must not resurrect its result.
-		if epoch == c.epoch && ctx.Err() == nil && !errors.Is(execErr, context.Canceled) && !errors.Is(execErr, context.DeadlineExceeded) && size <= maxExecutionCacheEntryBytes {
+		if currentFlight && ctx.Err() == nil && !errors.Is(execErr, context.Canceled) && !errors.Is(execErr, context.DeadlineExceeded) && size <= maxExecutionCacheEntryBytes {
 			entry := &executionEntry{key: key, result: cloneResult(result), err: execErr, created: time.Now(), bytes: size}
 			c.entries[key] = c.lru.PushFront(entry)
 			c.bytes += size
@@ -148,7 +147,6 @@ func (e *Executor) InvalidateDocument(uri string) {
 	c := &e.cache
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.epoch++
 	for key, element := range c.entries {
 		if DocumentKeyMatches(key.uri, uri) {
 			c.remove(element)

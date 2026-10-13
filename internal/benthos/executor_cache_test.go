@@ -2,6 +2,7 @@ package benthos
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,4 +96,62 @@ func TestExecutionCacheBoundsAndCancellation(t *testing.T) {
 	_, err = executor.executeContext(ctx, "file:///mapping.blobl", sample, "root = cache_tick()")
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, int64(4), calls.Load())
+}
+
+type observedWaitContext struct {
+	context.Context
+	waiting chan struct{}
+	once    sync.Once
+}
+
+func (ctx *observedWaitContext) Done() <-chan struct{} {
+	ctx.once.Do(func() { close(ctx.waiting) })
+	return ctx.Context.Done()
+}
+
+func TestExecutionCacheSharesInflightWorkAndCancelsWaiters(t *testing.T) {
+	var calls atomic.Int64
+	entered, release := make(chan struct{}), make(chan struct{})
+	executor := countingExecutor(t, func() (any, error) {
+		if calls.Add(1) == 1 {
+			close(entered)
+			<-release
+		}
+		return int64(7), nil
+	})
+	sample := &Sample{Value: map[string]any{}}
+	run := func(ctx context.Context, done chan error) {
+		_, err := executor.executeContext(ctx, "file:///mapping.blobl", sample, "root = cache_tick()")
+		done <- err
+	}
+	first := make(chan error, 1)
+	go run(context.Background(), first)
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("first execution did not start")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	waiter := &observedWaitContext{Context: ctx, waiting: make(chan struct{})}
+	second := make(chan error, 1)
+	go run(waiter, second)
+	select {
+	case <-waiter.waiting:
+	case <-time.After(time.Second):
+		t.Fatal("second execution did not wait for shared work")
+	}
+	cancel()
+	require.ErrorIs(t, <-second, context.Canceled)
+	thirdContext := &observedWaitContext{Context: context.Background(), waiting: make(chan struct{})}
+	third := make(chan error, 1)
+	go run(thirdContext, third)
+	select {
+	case <-thirdContext.waiting:
+	case <-time.After(time.Second):
+		t.Fatal("third execution did not wait for shared work")
+	}
+	close(release)
+	require.NoError(t, <-first)
+	require.NoError(t, <-third)
+	require.Equal(t, int64(1), calls.Load())
 }
