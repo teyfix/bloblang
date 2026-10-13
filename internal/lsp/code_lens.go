@@ -91,6 +91,7 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 					Arguments: []json.RawMessage{[]byte(resultBefore.Full), rawJSON(string(uri))},
 				},
 			})
+			lenses = append(lenses, schemaCodeLens(startRow, "Input", resultBefore.Full, uri))
 		}
 
 		// Calculate cumulative state AFTER this assignment
@@ -120,6 +121,7 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 					Arguments: []json.RawMessage{[]byte(resultAfter.Full), rawJSON(string(uri))},
 				},
 			})
+			lenses = append(lenses, schemaCodeLens(startRow, "Output", resultAfter.Full, uri))
 		}
 	}
 
@@ -131,4 +133,17 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 	}
 	h.publishExecDiagnosticsVersion(ctx, uri, execErrs, version)
 	return lenses, nil
+}
+
+// Carry the existing preview payload without inferring on each lens request.
+// The schema is generated only when the client executes the command.
+func schemaCodeLens(row int, direction, raw string, uri protocol.DocumentURI) protocol.CodeLens {
+	return protocol.CodeLens{
+		Range: protocol.Range{Start: protocol.Position{Line: row}, End: protocol.Position{Line: row}},
+		Command: &protocol.Command{
+			Title:     "Show " + direction + " Schema",
+			Command:   "bloblang-lsp.showSchema",
+			Arguments: []json.RawMessage{[]byte(raw), rawJSON(string(uri))},
+		},
+	}
 }

@@ -154,7 +154,7 @@ func (h *Handler) Initialize(_ context.Context, params *protocol.InitializeParam
 			CodeActionProvider:         &protocol.CodeActionOptions{CodeActionKinds: []protocol.CodeActionKind{protocol.CodeActionQuickFix}},
 			InlayHintProvider:          &protocol.InlayHintOptions{},
 			CodeLensProvider:           &protocol.CodeLensOptions{},
-			ExecuteCommandProvider:     &protocol.ExecuteCommandOptions{Commands: []string{"bloblang-lsp.showResult", "bloblang-lsp.openFile"}},
+			ExecuteCommandProvider:     &protocol.ExecuteCommandOptions{Commands: executeCommandNames()},
 		},
 		ServerInfo: &protocol.ServerInfo{Name: "bloblang-lsp", Version: h.serverVersion},
 	}, nil
