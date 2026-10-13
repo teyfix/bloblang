@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
@@ -206,18 +205,13 @@ func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protoc
 		return nil, fmt.Errorf("map definition is no longer available")
 	}
 	target := defs[0]
-	candidates, err := h.renameFiles(ctx)
+	candidates, err := h.navigationFiles(ctx)
 	if err != nil {
 		return nil, err
 	}
 	candidates[p.TextDocument.URI] = true
 	candidates[protocol.DocumentURI(strings.Split(string(target.URI), "#bloblang-")[0])] = true
-	var paths []protocol.DocumentURI
-	for uri := range candidates {
-		paths = append(paths, uri)
-	}
-	sort.Slice(paths, func(i, j int) bool { return paths[i] < paths[j] })
-	for _, uri := range paths {
+	for _, uri := range sortedNavigationFiles(candidates) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -260,7 +254,7 @@ func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protoc
 	return edits, nil
 }
 
-func (h *Handler) renameFiles(ctx context.Context) (map[protocol.DocumentURI]bool, error) {
+func (h *Handler) navigationFiles(ctx context.Context) (map[protocol.DocumentURI]bool, error) {
 	files := map[protocol.DocumentURI]bool{}
 	supported := func(uri protocol.DocumentURI) bool {
 		s := strings.ToLower(string(uri))
@@ -285,7 +279,7 @@ func (h *Handler) renameFiles(ctx context.Context) (map[protocol.DocumentURI]boo
 			}
 			if d.IsDir() {
 				switch d.Name() {
-				case ".git", "node_modules", ".volumes", ".local", ".history", ".worktrees", "vendor":
+				case ".git", "node_modules", ".cache", ".state", ".volumes", ".local", ".history", ".worktrees", "vendor":
 					return filepath.SkipDir
 				}
 			} else if uri := fileURI(path); supported(uri) {
