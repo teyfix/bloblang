@@ -84,10 +84,27 @@ func decodeSampleValue(data []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if decoder.Decode(&v) == nil {
-		return normalizeNumbers(v), nil
+		var trailing any
+		if decoder.Decode(&trailing) == io.EOF {
+			return normalizeNumbers(v), nil
+		}
 	}
-	if err := yaml.Unmarshal(data, &v); err != nil {
+	// JSON-looking YAML can contain comments or document markers after a value.
+	// Retry the entire input, but require exactly one complete YAML document too.
+	v = nil
+	yamlDecoder := yaml.NewDecoder(bytes.NewReader(data))
+	if err := yamlDecoder.Decode(&v); err != nil {
+		if err == io.EOF {
+			return nil, fmt.Errorf("sample must contain one JSON or YAML document")
+		}
 		return nil, err
+	}
+	var trailing any
+	if err := yamlDecoder.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return nil, fmt.Errorf("invalid trailing sample content: %w", err)
+		}
+		return nil, fmt.Errorf("sample must contain only one JSON or YAML document")
 	}
 	return v, nil
 }
@@ -349,10 +366,10 @@ func normalizeNumbers(v any) any {
 		if i, e := strconv.ParseInt(string(x), 10, 64); e == nil {
 			return i
 		}
-		if f, e := strconv.ParseFloat(string(x), 64); e == nil {
-			return f
-		}
-		return x.String()
+		// Keep decimal lexemes and integers outside int64 exact. Benthos accepts
+		// json.Number and applies its numeric conversion only when an operation
+		// needs it; loading fixtures must not round pass-through values.
+		return x
 	case map[string]any:
 		for k, c := range x {
 			x[k] = normalizeNumbers(c)
