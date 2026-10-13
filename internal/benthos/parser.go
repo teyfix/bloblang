@@ -25,6 +25,7 @@ func NewBloblang() (*Bloblang, error) {
 	parser := tree_sitter.NewParser()
 
 	if err := parser.SetLanguage(language); err != nil {
+		parser.Close()
 		return nil, err
 	}
 
@@ -105,6 +106,9 @@ func endPoint(s string) tree_sitter.Point {
 func (b *Bloblang) Parse(uri string, document string) (*tree_sitter.Tree, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.parser == nil {
+		return nil, fmt.Errorf("Bloblang parser is closed")
+	}
 
 	if cached, ok := b.trees[uri]; ok && cached.text == document {
 		return cached.tree.Clone(), nil
@@ -144,23 +148,43 @@ func (b *Bloblang) InvalidateDocument(uri string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if cached, ok := b.trees[uri]; ok {
-		if cached.tree != nil {
+	for key, cached := range b.trees {
+		if DocumentKeyMatches(key, uri) {
 			cached.tree.Close()
+			delete(b.trees, key)
 		}
-		delete(b.trees, uri)
 	}
 }
 
-// Close frees all retained trees. Call when the Bloblang instance is no longer needed.
-func (b *Bloblang) Close(uri string) {
+// DocumentKeyMatches includes the parser's derived documents and YAML regions.
+func DocumentKeyMatches(key, uri string) bool {
+	return key == uri || strings.HasPrefix(key, uri+":") || strings.HasPrefix(key, uri+"#bloblang-")
+}
+
+// Clear releases cached trees while keeping the parser available for reuse.
+func (b *Bloblang) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.clear()
+}
 
+func (b *Bloblang) clear() {
 	for k, cached := range b.trees {
 		if cached.tree != nil {
 			cached.tree.Close()
 		}
 		delete(b.trees, k)
+	}
+}
+
+// Close releases all native resources. The optional argument is accepted for
+// compatibility with older internal callers; it never selected a document.
+func (b *Bloblang) Close(_ ...string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.clear()
+	if b.parser != nil {
+		b.parser.Close()
+		b.parser = nil
 	}
 }
