@@ -24,7 +24,6 @@ func NewHarness(t *testing.T) *Harness {
 		BloblangDocsURL:        "https://docs.redpanda.com/redpanda-connect/guides/bloblang",
 		LogLevel:               "error",
 		DiagnosticsDebounce:    20 * time.Millisecond,
-		InlineResultDebounce:   20 * time.Millisecond,
 		MaxInlineDocumentBytes: 150000,
 		MaxInlineResultBytes:   100,
 		PartialExecCacheSize:   100,

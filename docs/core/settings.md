@@ -55,10 +55,11 @@ max_inline_result_bytes: 100
 | `log_level` | `info` | Server logging |
 | `max_inline_document_bytes` | `150000` | Execution size limit |
 | `max_inline_result_bytes` | `100` | Inline label truncation; does not set preview print width |
-| `diagnostics_debounce` | `200ms` | Retained legacy setting; current handler does not debounce validation |
-| `inline_result_debounce` | `100ms` | Retained legacy setting; current handler does not debounce evaluation |
-| `partial_exec_cache_size` | `1000` | Retained legacy setting; current executor does not maintain this cache |
-| `partial_exec_cache_ttl` | `5m` | Retained legacy setting; current executor does not maintain this cache |
+| `diagnostics_debounce` | `200ms` | Coalesce validation after edits; zero disables the delay |
+| `partial_exec_cache_size` | `1000` | Maximum cached evaluation results; zero disables caching |
+| `partial_exec_cache_ttl` | `5m` | Maximum result age; zero disables caching |
+
+Evaluation results are reused between hints, hovers and code lenses for unchanged source and fixtures. Edits, document close and watched dependency changes invalidate them. Cache retention is additionally capped at 16 MiB of encoded results, with entries over 1 MiB omitted. Inlay requests evaluate only requested positions; canceled or superseded requests stop between runtime calls. A synchronous Benthos function already running cannot be interrupted. The former unused `inline_result_debounce` option has been removed.
 
 Every key has an environment override named `BLOBLANG_LSP_<UPPERCASE_KEY>`, for example `BLOBLANG_LSP_MAX_INLINE_RESULT_BYTES=200`. Startup settings are loaded once; changing them requires restarting the server.
 

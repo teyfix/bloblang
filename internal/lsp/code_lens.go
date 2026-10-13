@@ -12,14 +12,25 @@ import (
 
 func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams) ([]protocol.CodeLens, error) {
 	uri := params.TextDocument.URI
+	ctx, version, text, sample, done, ok := h.requestDocument(ctx, uri)
+	defer done()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []protocol.CodeLens{}, nil
+	}
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
-		host, _ := h.documents.Text(uri)
+		host := text
 		out := []protocol.CodeLens{}
-		for _, r := range h.regions(uri) {
+		for _, r := range extractRegions(uri, host) {
 			cp := *params
 			cp.TextDocument.URI = r.uri
 			vals, err := h.CodeLens(ctx, &cp)
 			if err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
 				continue
 			}
 			for _, v := range vals {
@@ -29,12 +40,7 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 		}
 		return out, nil
 	}
-	sample := h.getSample(uri)
 	if sample == nil {
-		return []protocol.CodeLens{}, nil
-	}
-	text, ok := h.documents.Text(uri)
-	if !ok {
 		return []protocol.CodeLens{}, nil
 	}
 
@@ -57,6 +63,9 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 
 	// 2. Traverse statements to generate statement level Show Input / Show Output code lenses
 	for i := uint(0); i < root.ChildCount(); i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		child := root.Child(i)
 		if child.Kind() != "root_assignment" && child.Kind() != "if_statement" {
 			continue
@@ -65,7 +74,7 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 		startRow := int(child.StartPosition().Row)
 
 		// Calculate cumulative state BEFORE this assignment
-		resultBefore, errBefore := h.executor.ExecuteThrough(h.parser, string(uri), sample, text, child.StartByte())
+		resultBefore, errBefore := h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, child.StartByte())
 		if errBefore != nil {
 			continue
 		}
@@ -85,7 +94,7 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 		}
 
 		// Calculate cumulative state AFTER this assignment
-		resultAfter, errAfter := h.executor.ExecuteThrough(h.parser, string(uri), sample, text, child.EndByte())
+		resultAfter, errAfter := h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, child.EndByte())
 		if errAfter != nil {
 			execErrs = append(execErrs, protocol.Diagnostic{
 				Range: protocol.Range{
@@ -114,6 +123,12 @@ func (h *Handler) CodeLens(ctx context.Context, params *protocol.CodeLensParams)
 		}
 	}
 
-	h.publishExecDiagnostics(ctx, uri, execErrs)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	for i := range execErrs {
+		execErrs[i].Range = rangeUTF16(text, execErrs[i].Range)
+	}
+	h.publishExecDiagnosticsVersion(ctx, uri, execErrs, version)
 	return lenses, nil
 }

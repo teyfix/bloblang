@@ -69,7 +69,7 @@ func (t *Tooling) operationConfig(uri protocol.DocumentURI) (editorconfig.Config
 }
 
 func (t *Tooling) finishOperation() {
-	t.h.parser.Close("")
+	t.h.parser.Clear()
 	t.h.workspaceRoot = ""
 }
 

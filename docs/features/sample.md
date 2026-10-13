@@ -1,6 +1,6 @@
 # Samples and runtime previews
 
-[`internal/benthos/sample.go`](../../internal/benthos/sample.go) extracts samples, and [`executor.go`](../../internal/benthos/executor.go) evaluates complete statement prefixes or selected expressions through the public Benthos runtime. Each evaluation starts from a fresh input and optional root target; the server does not simulate processor pipelines or cache cumulative execution results.
+[`internal/benthos/sample.go`](../../internal/benthos/sample.go) extracts samples, and [`executor.go`](../../internal/benthos/executor.go) evaluates complete statement prefixes or selected expressions through the public Benthos runtime. Each uncached evaluation starts from a fresh input and optional root target. The server reuses bounded results for identical statement prefixes and fixtures until an edit, dependency change or cache expiry; it does not simulate processor pipelines. Before and after previews share the same cached prefix result, but generating all distinct prefixes still replays the mapping from its input.
 
 For `mapping.blobl`, automatic discovery looks for `mapping.sample.json`, `.yaml`, or `.yml`. File samples require the `$bloblang` envelope:
 

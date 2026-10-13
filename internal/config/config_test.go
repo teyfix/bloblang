@@ -17,7 +17,6 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, "https://docs.redpanda.com/redpanda-connect/guides/bloblang", cfg.BloblangDocsURL)
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, 200*time.Millisecond, cfg.DiagnosticsDebounce)
-	assert.Equal(t, 100*time.Millisecond, cfg.InlineResultDebounce)
 	assert.Equal(t, 150000, cfg.MaxInlineDocumentBytes)
 	assert.Equal(t, 100, cfg.MaxInlineResultBytes)
 	assert.Equal(t, 1000, cfg.PartialExecCacheSize)

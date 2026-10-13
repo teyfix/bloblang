@@ -22,5 +22,6 @@ func NewServer(handler *Handler, logger *slog.Logger) *server.Server {
 }
 
 func Run(ctx context.Context, handler *Handler, logger *slog.Logger, rw io.ReadWriteCloser) error {
+	defer handler.Shutdown(context.Background())
 	return NewServer(handler, logger).Run(ctx, rw)
 }

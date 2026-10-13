@@ -1,6 +1,7 @@
 package benthos
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,8 +24,10 @@ type PartialResult struct {
 	Deleted   bool
 }
 type Executor struct {
-	benv   *bloblang.Environment
-	config *config.Config
+	benv     *bloblang.Environment
+	config   *config.Config
+	cache    executionCache
+	importer func(string, string) ([]byte, error)
 }
 
 func NewExecutor(benv *bloblang.Environment, cfg *config.Config) *Executor {
@@ -64,11 +67,36 @@ func sampleOf(v any) *Sample {
 	return &Sample{Value: v}
 }
 func (e *Executor) execute(uri string, sample *Sample, snippet string) (*PartialResult, error) {
+	return e.executeContext(context.Background(), uri, sample, snippet)
+}
+
+// SetImporter shares the caller's source-path rules with runtime evaluation.
+// Configure it before serving requests.
+func (e *Executor) SetImporter(importer func(string, string) ([]byte, error)) {
+	e.importer = importer
+}
+
+func (e *Executor) executeContext(ctx context.Context, uri string, sample *Sample, snippet string) (*PartialResult, error) {
+	return e.cachedExecution(ctx, uri, sample, snippet, func() (*PartialResult, error) {
+		return e.executeUncached(ctx, uri, sample, snippet)
+	})
+}
+
+func (e *Executor) executeUncached(ctx context.Context, uri string, sample *Sample, snippet string) (*PartialResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	preview, err := PreviewEnvironment(e.benv, sample)
 	if err != nil {
 		return nil, err
 	}
 	env := preview.WithCustomImporter(func(name string) ([]byte, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if e.importer != nil {
+			return e.importer(uri, name)
+		}
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(documentDir(uri), name)
 		}
@@ -77,6 +105,9 @@ func (e *Executor) execute(uri string, sample *Sample, snippet string) (*Partial
 	snippet += "\nroot = match { root.type() == \"delete\" => deleted(), root.type() == \"nothing\" => {\"__bloblang_lsp_output\": this}, _ => {\"__bloblang_lsp_output\": root} }"
 	parsed, err := env.Parse(snippet)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	msg := service.NewMessage(nil)
@@ -91,6 +122,9 @@ func (e *Executor) execute(uri string, sample *Sample, snippet string) (*Partial
 		out, err = target.BloblangMutateFrom(parsed, msg)
 	} else {
 		out, err = msg.BloblangQuery(parsed)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	if err != nil {
 		return nil, err
@@ -123,6 +157,8 @@ func cloneValue(v any) any {
 			out[i] = cloneValue(c)
 		}
 		return out
+	case []byte:
+		return append([]byte(nil), x...)
 	}
 	return v
 }
@@ -140,6 +176,13 @@ func documentDir(uri string) string {
 
 // ExecuteThrough executes complete statements ending before the byte cutoff.
 func (e *Executor) ExecuteThrough(parser *Bloblang, uri string, sample *Sample, text string, cutoff uint) (*PartialResult, error) {
+	return e.ExecuteThroughContext(context.Background(), parser, uri, sample, text, cutoff)
+}
+
+func (e *Executor) ExecuteThroughContext(ctx context.Context, parser *Bloblang, uri string, sample *Sample, text string, cutoff uint) (*PartialResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(text) > e.config.MaxInlineDocumentBytes {
 		return nil, nil
 	}
@@ -162,7 +205,7 @@ func (e *Executor) ExecuteThrough(parser *Bloblang, uri string, sample *Sample, 
 		}
 		return e.result(sample.Value, sample.Meta, false)
 	}
-	return e.execute(uri, sample, strings.Join(parts, "\n"))
+	return e.executeContext(ctx, uri, sample, strings.Join(parts, "\n"))
 }
 func (e *Executor) ExecuteCumulative(parser *Bloblang, uri string, value any, text string, line int) (*PartialResult, error) {
 	sample := sampleOf(value)
@@ -191,6 +234,16 @@ func (e *Executor) ExecuteCumulative(parser *Bloblang, uri string, value any, te
 // EvaluateExpression appends a synthetic assignment after preceding complete statements.
 // The runtime evaluates the synthetic RHS against the preceding output state.
 func (e *Executor) EvaluateExpression(parser *Bloblang, uri string, sample *Sample, text string, statement, expr *tree_sitter.Node) (*PartialResult, error) {
+	return e.EvaluateExpressionContext(context.Background(), parser, uri, sample, text, statement, expr)
+}
+
+func (e *Executor) EvaluateExpressionContext(ctx context.Context, parser *Bloblang, uri string, sample *Sample, text string, statement, expr *tree_sitter.Node) (*PartialResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(text) > e.config.MaxInlineDocumentBytes {
+		return nil, nil
+	}
 	if statement == nil || expr == nil {
 		return nil, nil
 	}
@@ -229,7 +282,7 @@ func (e *Executor) EvaluateExpression(parser *Bloblang, uri string, sample *Samp
 	} else {
 		parts = append(parts, trimBranch(top, statement, replacement, text))
 	}
-	result, err := e.execute(uri, sample, strings.Join(parts, "\n"))
+	result, err := e.executeContext(ctx, uri, sample, strings.Join(parts, "\n"))
 	if err != nil || result == nil {
 		return result, err
 	}
@@ -245,7 +298,6 @@ func (e *Executor) EvaluateExpression(parser *Bloblang, uri string, sample *Samp
 
 }
 
-func (e *Executor) InvalidateDocument(string) {}
 func looksIncomplete(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unexpected eof") || strings.Contains(msg, "unexpected end") || strings.Contains(msg, "unterminated")

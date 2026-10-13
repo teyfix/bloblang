@@ -88,7 +88,7 @@ func TestLargeHoverAndInlayTooltipsAreBounded(t *testing.T) {
 	require.NotNil(t, hover)
 	require.True(t, strings.HasPrefix(hover.Contents.Value(), "**Preview truncated**"))
 	require.Less(t, len(hover.Contents.Value()), maxTooltipBytes+512)
-	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}})
+	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Range: protocol.Range{End: protocol.Position{Line: 10000}}})
 	require.NoError(t, err)
 	require.Len(t, hints, 3)
 	for _, hint := range hints {
