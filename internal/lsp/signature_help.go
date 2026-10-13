@@ -128,6 +128,7 @@ func activeSignatureCall(ctx context.Context, text string, offset int) (*signatu
 }
 
 func (h *Handler) SignatureHelp(ctx context.Context, p *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

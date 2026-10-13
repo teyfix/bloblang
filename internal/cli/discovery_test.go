@@ -123,7 +123,7 @@ func TestDiscoveryAllIgnoredAndValidationErrors(t *testing.T) {
 func TestNoIgnoreRetainsHardSkips(t *testing.T) {
 	dir := ignoreFixture(t)
 	writeInput(t, filepath.Join(dir, "mapping.blobl"), "root = this\n")
-	for _, skip := range []string{".git", ".volumes", "node_modules", "vendor", "target"} {
+	for _, skip := range []string{".git", ".cache", ".state", ".worktrees", ".volumes", "node_modules", "vendor", "target"} {
 		if skip == ".git" {
 			continue
 		}
@@ -175,7 +175,7 @@ func TestGlobProjectRootDoesNotReadParentSettings(t *testing.T) {
 
 func TestGlobHardSkippedAncestorsInLiteralPrefix(t *testing.T) {
 	dir := ignoreFixture(t)
-	for _, skip := range []string{"node_modules", ".volumes", "vendor", "target"} {
+	for _, skip := range []string{"node_modules", ".cache", ".state", ".worktrees", ".volumes", "vendor", "target"} {
 		writeInput(t, filepath.Join(dir, skip, "child", "bad.blobl"), "root = [\n")
 		for _, flag := range [][]string{nil, {"--no-ignore"}} {
 			args := append([]string{"lint"}, flag...)

@@ -153,6 +153,7 @@ func fileURI(path string) protocol.DocumentURI {
 	return protocol.DocumentURI(fileuri.FromPath(path))
 }
 func (h *Handler) Definition(_ context.Context, p *protocol.DefinitionParams) ([]protocol.Location, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	uri := p.TextDocument.URI
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
 		host, _ := h.documents.Text(uri)
@@ -182,6 +183,7 @@ func (h *Handler) Definition(_ context.Context, p *protocol.DefinitionParams) ([
 	return h.definitionForText(uri, text, p.Position)
 }
 func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, position protocol.Position) ([]protocol.Location, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	tree, err := h.parser.Parse(string(uri), text)
 	if err != nil {
 		return nil, nil
@@ -235,7 +237,8 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 			if err != nil {
 				return nil
 			}
-			t, err := h.parser.Parse(path, txt)
+			defer h.discardClosedDocumentTrees(fileURI(path))
+			t, err := h.parser.Parse(string(fileURI(path)), txt)
 			if err != nil {
 				return nil
 			}
@@ -276,6 +279,7 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 // References and rename share binding resolution and candidate discovery, so
 // unopened mappings, YAML regions and every workspace root behave consistently.
 func (h *Handler) References(ctx context.Context, p *protocol.ReferenceParams) ([]protocol.Location, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

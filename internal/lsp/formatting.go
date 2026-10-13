@@ -174,6 +174,7 @@ func formatSpace(a, b string) bool {
 	return true
 }
 func (h *Handler) Formatting(_ context.Context, p *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	text, ok := h.documents.Text(p.TextDocument.URI)
 	if !ok {
 		return []protocol.TextEdit{}, nil

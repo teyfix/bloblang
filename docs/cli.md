@@ -22,7 +22,7 @@ blobl fmt --check '**/*.blobl'
 
 `fmt` with a single file writes the formatted source to stdout. `--write` updates files in place and accepts multiple files or directories. `--check` accepts the same inputs, leaves files unchanged, lists files that differ on stdout, and returns `1` when formatting differs. `--write` and `--check` are mutually exclusive. Multiple files and directories require one of those modes. `--tab-size` selects an indentation width from 1 through 8; the default is 2.
 
-The formatter preserves comments and string contents and validates its output. It formats recognized embedded YAML mappings while preserving surrounding YAML. `${! ... }` interpolations are not formatted. Invalid host YAML or malformed Bloblang that prevents formatting returns `2`. Formatting does not apply lint refactors.
+The formatter preserves comments and string contents and validates its output. It formats recognized embedded YAML mappings while preserving surrounding YAML, scalar comments/properties and host indentation. Attached comments, lint suppression targets and existing line endings survive formatting; attached comments may exceed the preferred width. `${! ... }` interpolations are not formatted. Invalid host YAML or malformed Bloblang that prevents formatting returns `2`. Formatting does not apply lint refactors.
 
 ## Linting
 
@@ -39,7 +39,7 @@ Lint reports Bloblang syntax, semantic and configured lint diagnostics, includin
 
 ## Files, directories, globs and stdin
 
-Explicit files are processed directly. Directories are scanned recursively for `.blobl`, `.bloblang`, `.yaml` and `.yml` files. Traversal skips `.git`, `.volumes`, `node_modules`, `vendor`, `target` and symlink entries. An explicitly supplied symlink is rejected; regular files reached through a symlinked parent directory are accepted. Files and diagnostics are processed in deterministic order.
+Explicit files are processed directly. Directories are scanned recursively for `.blobl`, `.bloblang`, `.yaml` and `.yml` files. Traversal skips `.git`, `.cache`, `.state`, `.worktrees`, `.volumes`, `node_modules`, `vendor`, `target` and symlink entries. An explicitly supplied symlink is rejected; regular files reached through a symlinked parent directory are accepted. Files and diagnostics are processed in deterministic order.
 
 Quote glob patterns to let `blobl` expand them consistently across shells. `*`, `?`, character classes, brace alternatives and `**` are supported; `**` matches recursively. Glob matches and explicit paths are deduplicated. Malformed patterns return `2`. An unmatched pattern returns `2` when its scan did not prune ignored entries. Empty results are accepted when ignore rules filtered matches or pruned directories; an entirely ignored input set returns `0`. Excluded directories are pruned before reading their descendant configuration or ignore files.
 

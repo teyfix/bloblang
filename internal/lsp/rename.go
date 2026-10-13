@@ -86,6 +86,7 @@ func (h *Handler) renameUnits(uri protocol.DocumentURI, text string) []renameUni
 }
 
 func (h *Handler) navigationUnits(uri protocol.DocumentURI, text string, allowErrors bool) []renameUnit {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	var units []renameUnit
 	if yamlDocument(uri) {
 		for _, region := range extractRegions(uri, text) {
@@ -146,6 +147,7 @@ func (h *Handler) navigationTarget(p protocol.TextDocumentPositionParams, allowE
 	return units, 0, nil
 }
 func (h *Handler) PrepareRename(_ context.Context, p *protocol.PrepareRenameParams) (*protocol.PrepareRenameResult, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	units, index, s := h.renameTarget(p.TextDocumentPositionParams)
 	defer closeRenameUnits(units)
 	if s == nil {
@@ -155,6 +157,7 @@ func (h *Handler) PrepareRename(_ context.Context, p *protocol.PrepareRenamePara
 }
 
 func (h *Handler) Rename(ctx context.Context, p *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if !validIdentifier(p.NewName) {
 		return nil, fmt.Errorf("use a Bloblang identifier: letters, digits and underscores, starting with a letter or underscore")
 	}
@@ -303,6 +306,7 @@ func (h *Handler) navigationFiles(ctx context.Context) (map[protocol.DocumentURI
 }
 
 func (h *Handler) mapNameExists(uri protocol.DocumentURI, text, name string, seen map[protocol.DocumentURI]bool) bool {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(uri))
 	if seen[uri] {
 		return false
 	}

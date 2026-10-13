@@ -357,6 +357,7 @@ func (h *Handler) lintDiagnostics(uri protocol.DocumentURI, text string) []proto
 	return out
 }
 func (h *Handler) CodeAction(_ context.Context, p *protocol.CodeActionParams) ([]protocol.CodeAction, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	uri := p.TextDocument.URI
 	text, ok := h.documents.Text(uri)
 	if !ok {

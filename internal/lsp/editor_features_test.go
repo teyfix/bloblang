@@ -129,6 +129,10 @@ func TestFoldingStructuresCommentsAndImports(t *testing.T) {
 func TestEditorFeatureWireHandlers(t *testing.T) {
 	h, uri := featureHandler(t)
 	harness := servertest.New(t, h)
+	require.Equal(t, []string{"(", ",", ":"}, harness.InitResult.Capabilities.SignatureHelpProvider.TriggerCharacters)
+	require.NotNil(t, harness.InitResult.Capabilities.DocumentSymbolProvider)
+	require.NotNil(t, harness.InitResult.Capabilities.FoldingRangeProvider)
+	require.True(t, *harness.InitResult.Capabilities.FoldingRangeProvider)
 	require.NoError(t, harness.DidOpen(uri, "bloblang", "map convert {\nroot = this\n}\nroot = range(0, "))
 	got, err := harness.SignatureHelp(uri, 3, len("root = range(0, "))
 	require.NoError(t, err)

@@ -6,8 +6,10 @@ Available starting with bloblang-lsp **v0.2.2**. In VS Code, place the cursor on
 
 - `let movie = ...` and its `$movie` references within the mapping. Repeated assignments to that variable are renamed together; separate named maps keep their own variables.
 - Lambda parameters such as `c -> c.name`. Nested lambdas with the same parameter name remain separate; the receiver of a nested call still belongs to the enclosing scope.
-- Named `map` declarations and literal `.apply("map_name")` references that resolve to them. Imported maps are followed through local imports. Workspace `.blobl`, `.bloblang`, `.yaml` and `.yml` files are searched, including unopened files; open buffers take precedence over disk contents.
+- Named `map` declarations and literal `.apply("map_name")` references that resolve to them. Imported maps are followed through local imports. Every workspace root is searched for `.blobl`, `.bloblang`, `.yaml` and `.yml` files, including unopened files; open buffers take precedence over disk contents.
 - Recognized embedded YAML mappings, preserving scalar quoting, escapes, indentation and adjacent YAML. Separate mappings within a YAML file remain independent.
+
+Reference search shares this discovery and binding resolution, including YAML consumers and unsaved buffers. Generated `.cache`, `.state` and `.worktrees` directories are excluded from scans.
 
 The rename field contains only the name. `$` prefixes and string delimiters stay in the source. New names must be identifiers: letters, digits and underscores, with a letter or underscore first. Invalid names, existing bindings and changes that would capture another binding are rejected before returning edits.
 

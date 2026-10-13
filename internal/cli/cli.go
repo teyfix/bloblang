@@ -135,7 +135,7 @@ func parseOptions(command string, args []string, stdout io.Writer) (commandOptio
 		_, _ = fmt.Fprintln(&help, "No paths or '-' reads stdin. Put options before paths.")
 		_, _ = fmt.Fprintln(&help, "Quoted glob patterns are expanded, including ** for recursive matches.")
 		_, _ = fmt.Fprintln(&help, "Directories recurse through .blobl, .bloblang, .yaml and .yml files.")
-		_, _ = fmt.Fprintln(&help, "Skip symlinks and .git, .volumes, node_modules, vendor, target directories.")
+		_, _ = fmt.Fprintln(&help, "Skip symlinks and .git, .cache, .state, .worktrees, .volumes, node_modules, vendor, target directories.")
 		fs.SetOutput(&help)
 		fs.PrintDefaults()
 		if _, writeErr := io.Copy(stdout, &help); writeErr != nil {

@@ -24,9 +24,9 @@ The environment rule distinguishes unset values from errors: `env()` returns nul
 
 Assignment grouping, object projection/deletion, and array existence rules are advisory. Rewrites need care: `assign()` merges nested objects, `with()` omits missing fields, and `any()` changes predicate evaluation through short-circuiting. The implementation limits grouping findings based on output state and expression structure. Unused local bindings are warnings and are not automatically removed because evaluation may perform work or throw.
 
-`style/objects/combine-without` offers an explicit `quickfix` for consecutive `without()` calls with literal arguments and no comments. Embedded YAML fixes are offered for plain and literal mappings; quoted and folded mappings retain their diagnostics without this edit. Other rules currently offer diagnostics only. The server does not implement a `source.fixAll` action or apply lint refactors during formatting.
+`style/objects/combine-without` offers an explicit `quickfix` for consecutive `without()` calls with literal arguments and no comments. Embedded YAML fixes preserve host indentation and validate the complete edited YAML. They are offered for plain and literal mappings; quoted and folded mappings retain their diagnostics without this edit. Other rules currently offer diagnostics only. The server does not implement a `source.fixAll` action or apply lint refactors during formatting.
 
-Suppress a rule for the next source line with its exact ID. Multiple IDs can be separated by commas or spaces; `all` suppresses all rules for that line. A reason after ` -- ` is optional.
+Suppress a rule for the syntax node beginning on the next source line with its exact ID. The suppression covers that node after formatting wraps it across several lines. Multiple IDs can be separated by commas or spaces; `all` suppresses all rules for the target node. A reason after ` -- ` is optional.
 
 ```bloblang
 # bloblang-lint-disable-next-line correctness/environment/require-fallback -- optional value

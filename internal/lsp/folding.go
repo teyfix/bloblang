@@ -12,6 +12,7 @@ import (
 // FoldingRange returns structural folds and consecutive comments/imports. All
 // positions go through the same UTF-16 and YAML source mapping as navigation.
 func (h *Handler) FoldingRange(ctx context.Context, p *protocol.FoldingRangeParams) ([]protocol.FoldingRange, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

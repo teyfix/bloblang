@@ -11,6 +11,7 @@ import (
 // DocumentSymbol exposes map declarations and assignments without evaluating the
 // mapping. Nested assignments stay under their containing map in the outline.
 func (h *Handler) DocumentSymbol(ctx context.Context, p *protocol.DocumentSymbolParams) ([]protocol.DocumentSymbol, error) {
+	defer h.discardClosedDocumentTrees(hostDocumentURI(p.TextDocument.URI))
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

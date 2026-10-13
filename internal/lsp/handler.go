@@ -142,6 +142,9 @@ func (h *Handler) Initialize(_ context.Context, params *protocol.InitializeParam
 			CompletionProvider: &protocol.CompletionOptions{
 				TriggerCharacters: []string{".", "@", "$"},
 			},
+			SignatureHelpProvider:      &protocol.SignatureHelpOptions{TriggerCharacters: []string{"(", ",", ":"}},
+			DocumentSymbolProvider:     &protocol.DocumentSymbolOptions{},
+			FoldingRangeProvider:       new(true),
 			HoverProvider:              new(true),
 			DefinitionProvider:         new(true),
 			ReferencesProvider:         new(true),

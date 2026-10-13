@@ -12,6 +12,8 @@ Logs go to stderr. Stdout is reserved for JSON-RPC. Diagnostics publish asynchro
 - [CLI reference](cli.md): formatting, static linting, stdin, configuration and exit status.
 - [Completion](features/completion.md), [hovers and previews](features/hover.md), [samples](features/sample.md), and [diagnostics](features/diagnostic.md).
 - [Lint behavior and fixes](features/lint.md) and [generated rule reference](features/lint-rules.md).
+- [Signature help, outline, folding and references](features/editor.md).
 - [Rename](features/rename.md): F2, scope handling, imports and embedded YAML.
+- [Server startup](core/main.md) and [selected dependency references](packages.md).
 
-The remaining package and core design notes are marked historical where they describe the abandoned rewrite.
+The shipped implementation uses document generations, cancellation contexts and mutex-protected caches. Remaining historical notes are labeled explicitly; they are not implementation requirements.
