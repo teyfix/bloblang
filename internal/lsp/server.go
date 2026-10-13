@@ -15,7 +15,7 @@ func NewServer(handler *Handler, logger *slog.Logger) *server.Server {
 		server.WithCapabilityOptions(server.CapabilityOptions{
 			Completion: &lsp.CompletionOptions{TriggerCharacters: []string{".", "@", "$"}},
 			ExecuteCommand: &lsp.ExecuteCommandOptions{
-				Commands: []string{"bloblang-lsp.showResult"},
+				Commands: executeCommandNames(),
 			},
 		}),
 	)

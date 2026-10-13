@@ -10,6 +10,8 @@ blobl schema --input-file response.json --map-path '/data/watch~1providers/resul
 
 `--input-file` reads raw JSON or YAML. `--sample` reads the `input` from an LSP `$bloblang` envelope; `root`, metadata, and environment fixtures are not part of the summarized value. Without a file, stdin accepts one JSON or YAML value. The output contains `schema` and `meta`; `--format` selects JSON or YAML serialization, with JTD used in both. Extract `schema` when passing the result to another JTD tool.
 
+In the editor, truncated assignment previews offer **Show Input Schema** and **Show Output Schema** beside their full-value lenses. Clicking a schema lens infers the corresponding captured preview and opens `schema` plus `meta` using the document's normal JSON/YAML preview setting. Merely requesting code lenses performs no inference. These editor summaries use no map hints; use the CLI or MCP tool for explicit map paths.
+
 Use repeated `--map-path` hints for objects whose keys are dynamic entries, such as country codes. Each hint is a JSON Pointer: `~1` escapes `/`, `~0` escapes `~`, and an empty pointer selects the root. The library additionally interprets a component `-` as a wildcard. Keys are preserved without hints; map shapes are not guessed.
 
 Enums and literal constants are not inferred. All numbers use `float64`, avoiding narrow integer bounds inferred from a small sample. The library can infer timestamps from strings. Optional fields reflect missing observations; required fields merely appeared in every observed object. Nullability is tracked separately. Empty objects, null-only fields, empty arrays, and heterogeneous values can become unconstrained (`{}`); JTD does not retain arbitrary mixed-type unions.

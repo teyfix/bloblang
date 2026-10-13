@@ -39,7 +39,7 @@ processor:
 
 Multiple candidates at an automatically selected sibling level are ambiguous; use an explicit whole-sample source. Inline whole-sample directives can override file selection. Missing automatic samples produce informational diagnostics; malformed samples and missing explicit paths produce errors. Sample errors disable dynamic values and leave static features available.
 
-File-watch notifications reload samples for open documents, including file creation, modification, and deletion. Valid samples enable before/after assignment inlays, input/output lenses for truncated values, sample-file navigation lenses, and supported value hovers. See the [README](../../README.md#samples) for directive examples and [hover rendering](hover.md) for preview configuration.
+File-watch notifications reload samples for open documents, including file creation, modification, and deletion. Valid samples enable before/after assignment inlays, input/output lenses for truncated values, sample-file navigation lenses, and supported value hovers. Truncated values also offer **Show Input Schema** and **Show Output Schema** lenses; schema inference runs only when clicked. See the [README](../../README.md#samples) for directive examples, [hover rendering](hover.md) for preview configuration, and [schema summaries](schema.md) for inference limitations.
 
 ## Environment fixtures
 

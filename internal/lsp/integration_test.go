@@ -143,15 +143,21 @@ func TestIntegrationTruncatedCodeLensCommand(t *testing.T) {
 #!input {"name":"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"}
 root = this.name`[1:])
 	lenses := h.GetCodeLenses(uri)
-	require.Len(t, lenses, 2)
+	require.Len(t, lenses, 4)
 	require.NotNil(t, lenses[0].Command)
 	assert.Contains(t, lenses[0].Command.Title, "Show Input")
 	assert.Equal(t, "bloblang-lsp.showResult", lenses[0].Command.Command)
 
 	require.NotNil(t, lenses[1].Command)
-	assert.Contains(t, lenses[1].Command.Title, "Show Output")
-	assert.Equal(t, "bloblang-lsp.showResult", lenses[1].Command.Command)
+	assert.Equal(t, "Show Input Schema", lenses[1].Command.Title)
+	assert.Equal(t, "bloblang-lsp.showSchema", lenses[1].Command.Command)
 	require.Len(t, lenses[1].Command.Arguments, 2)
+	require.NotNil(t, lenses[2].Command)
+	assert.Contains(t, lenses[2].Command.Title, "Show Output")
+	assert.Equal(t, "bloblang-lsp.showResult", lenses[2].Command.Command)
+	require.NotNil(t, lenses[3].Command)
+	assert.Equal(t, "Show Output Schema", lenses[3].Command.Title)
+	assert.Equal(t, "bloblang-lsp.showSchema", lenses[3].Command.Command)
 
 	var full map[string]interface{}
 	require.NoError(t, json.Unmarshal(lenses[0].Command.Arguments[0], &full))
