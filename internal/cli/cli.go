@@ -44,6 +44,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runMappingCommand(ctx, args[1:], stdin, stdout, stderr)
 	case "test":
 		return runTestCommand(ctx, args[1:], stdin, stdout, stderr)
+	case "schema":
+		return runSchemaCommand(ctx, args[1:], stdin, stdout, stderr)
 	case "--version", "-version", "version":
 		if len(args) != 1 {
 			return fail(stderr, errors.New("version accepts no arguments"))
@@ -101,6 +103,7 @@ Commands:
   lint   Report static diagnostics; --fix applies safe fixes
   run    Evaluate a mapping and report static diagnostics
   test   Run named mapping fixtures and assertions
+  schema Summarize a JSON/YAML sample as JSON Type Definition
 
 Use blobl <command> --help for command options, or blobl --version.
 `)
