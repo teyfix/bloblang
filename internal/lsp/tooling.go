@@ -119,14 +119,49 @@ func toolingYAML(text string) error {
 
 func (t *Tooling) environment(uri protocol.DocumentURI) *bloblang.Environment {
 	source := editorconfig.SourceContext{Dir: t.h.baseDirForURI(uri)}
+	// Benthos recursively parses imports without cycle detection. Bound both
+	// traversal and source bytes, including explicit import maps used by MCP.
+	const maxImports, maxBytes = 256, 4 << 20
+	calls, remaining := 0, maxBytes
 	return t.h.benv.WithCustomImporter(func(name string) ([]byte, error) {
-		if t.imports != nil {
-			if source, ok := t.imports[name]; ok {
-				return []byte(source), nil
-			}
-			return nil, fmt.Errorf("import %q was not supplied in imports", name)
+		calls++
+		if calls > maxImports {
+			return nil, fmt.Errorf("import traversal exceeds %d imports (possible cycle)", maxImports)
 		}
-		return os.ReadFile(source.ImportPath(name))
+		var data []byte
+		if t.imports != nil {
+			text, ok := t.imports[name]
+			if !ok {
+				return nil, fmt.Errorf("import %q was not supplied in imports", name)
+			}
+			data = []byte(text)
+		} else {
+			path := source.ImportPath(name)
+			info, err := os.Stat(path)
+			if err != nil {
+				return nil, err
+			}
+			if !info.Mode().IsRegular() {
+				return nil, fmt.Errorf("import %q must be a regular file", name)
+			}
+			if info.Size() > int64(remaining) {
+				return nil, fmt.Errorf("import sources exceed %d bytes", maxBytes)
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
+			defer file.Close()
+			data, err = io.ReadAll(io.LimitReader(file, int64(remaining)+1))
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(data) > remaining {
+			return nil, fmt.Errorf("import sources exceed %d bytes", maxBytes)
+		}
+		remaining -= len(data)
+		return data, nil
 	})
 }
 
