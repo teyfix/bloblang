@@ -30,6 +30,7 @@ Use an absolute executable path when the client does not inherit your shell's `P
 | `bloblang_format` | Return formatted source without changing files. |
 | `bloblang_search` | Search functions and methods using batched lexical and fuzzy queries. |
 | `bloblang_docs` | Retrieve full documentation by exact function or method IDs. |
+| `bloblang_schema` | Summarize sample structure as JSON Type Definition (JTD). |
 
 All tools are read-only. File inputs are read from the machine running the server, including a remote extension host or container if that is where the client launches it. Files are not uploaded to a service. Requests, source text and individual file reads are bounded to 4 MiB.
 
@@ -84,7 +85,7 @@ The optional execution arguments are:
 
 Execution permits pure mappings. I/O functions are unavailable; `env()` reads only explicit fixtures and returns `null` for missing names. `imports` can supply imported mapping source explicitly by path. File-backed mappings snapshot transitive imports relative to the mapping file; explicit entries override those files. Inline source reads imports only from the supplied map. Import traversal and source bytes are bounded. This differs from editor previews that use an empty-string placeholder for missing environment values.
 
-The result contains `output`, output `metadata`, `deleted`, and `diagnostics`, plus `error` when execution fails. Diagnostics include lint findings as well as relevant source errors; their lines and columns are one-based. A successful evaluation can still have lint diagnostics. A deleted result is identified by `deleted`, so clients can distinguish deletion from JSON `null` output.
+The result contains `output`, output `metadata`, `deleted`, and `diagnostics`, plus `error` when execution fails or `lintError` when static tooling fails. Either error marks the MCP result as an error while preserving the structured result. Diagnostics include lint findings as well as relevant source errors; their lines and columns are one-based. A successful evaluation can still have lint diagnostics. A deleted result is identified by `deleted`, so clients can distinguish deletion from JSON `null` output. Clock and random functions remain available, so repeated evaluations can produce different values.
 
 ## Lint and format
 
@@ -99,7 +100,21 @@ Both tools accept exactly one of inline `source` and `mappingPath`. An optional 
 
 `bloblang_lint` returns `source` and `diagnostics`. It performs static analysis and does not apply fixes. Diagnostic lines and columns are one-based; diagnostics in YAML refer to the host file.
 
-`bloblang_format` returns formatted `source` and a `changed` boolean. Its optional `tabSize` selects an indentation width from 1 through 16; the default is 2. The result is returned to the caller without writing to `mappingPath` or `filename`.
+`bloblang_format` returns formatted `source` and a `changed` boolean. Its optional `tabSize` selects an indentation width from 1 through 8; the default is 2. The result is returned to the caller without writing to `mappingPath` or `filename`.
+
+## Summarize sample structure
+
+`bloblang_schema` uses the existing Go `jtd-infer-go` library to return a compact JTD schema and metadata explaining inference limits. It accepts exactly one of inline `input`, raw JSON/YAML `inputPath`, or a `$bloblang` envelope `samplePath`. Envelope input is summarized; metadata and environment fixtures are excluded. No mapping is executed.
+
+```json
+{
+  "inputPath": "/workspace/samples/tmdb.json"
+}
+```
+
+Optional `mapPaths` contains JSON Pointers for objects whose keys represent dynamic entries, for example `["/translations"]`. Use `-` for array elements and normal JSON Pointer escaping (`~1` for `/`, `~0` for `~`).
+
+The response contains a JSON object in `schema`, and `meta` with `format: "jtd"`, `sampleBased: true`, `enumInference: false`, `numericType: "float64"`, and warnings. Enums are deliberately disabled because a narrow sample cannot establish a complete value set. Observed fields and inferred types are not an authoritative contract for future data. Empty or mixed values can be unconstrained; unsupported inference fails explicitly. See [schema summaries](features/schema.md) for bounds and limitations.
 
 ## Search documentation
 

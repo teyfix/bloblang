@@ -55,6 +55,7 @@ func New(version string, options Options) *mcp.Server {
 	index := help.NewIndex(benthos.NewEnvironment())
 
 	addRunTool(server, options)
+	addSchemaTool(server)
 
 	mcp.AddTool(server, tool("bloblang_lint", "Statically validate and lint Bloblang source or an entire YAML mapping file without executing it. Provide source or mappingPath. Optional filename gives inline source its extension and project configuration context (default mapping.blobl). Imports for inline source must be explicitly supplied. Returns source and diagnostics with one-based Unicode positions; never writes files.", sourceSchema(false)),
 		func(ctx context.Context, req *mcp.CallToolRequest, input sourceRequest) (*mcp.CallToolResult, lintResult, error) {
@@ -73,7 +74,7 @@ func New(version string, options Options) *mcp.Server {
 			return nil, output, err
 		})
 
-	mcp.AddTool(server, tool("bloblang_format", "Format Bloblang source or embedded YAML mappings while preserving the YAML host. Provide source or mappingPath. Optional filename gives inline source its extension and project configuration context (default mapping.blobl). Imports for inline source must be explicitly supplied. tabSize is 1..16 (default 2). Returns formatted source and whether it changed; never writes files.", sourceSchema(true)),
+	mcp.AddTool(server, tool("bloblang_format", "Format Bloblang source or embedded YAML mappings while preserving the YAML host. Provide source or mappingPath. Optional filename gives inline source its extension and project configuration context (default mapping.blobl). Imports for inline source must be explicitly supplied. tabSize is 1..8 (default 2). Returns formatted source and whether it changed; never writes files.", sourceSchema(true)),
 		func(ctx context.Context, req *mcp.CallToolRequest, input sourceRequest) (*mcp.CallToolResult, formatResult, error) {
 			var output formatResult
 			path, source, err := loadSource(ctx, req, input)

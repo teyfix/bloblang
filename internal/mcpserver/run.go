@@ -20,6 +20,7 @@ import (
 // json.Number and forwards the original RawMessages unchanged.
 func addRunTool(server *mcp.Server, options Options) {
 	definition := tool("bloblang_run", "Evaluate one Bloblang mapping and return output, metadata, deletion status, lint diagnostics and errors. Provide source or mappingPath, and input (any JSON value, including null), inputPath (raw JSON/YAML), or samplePath (LSP $bloblang sample envelope). Omit input arguments to use mapping sample directives or a file-backed sibling sample. Paths are local to this server. Use file paths for large samples. Environment and metadata fixtures are explicit; host I/O functions are disabled. timeoutMs is 1..5000 (default 5000); execution runs in a killable worker.", runSchema())
+	definition.Annotations.IdempotentHint = false
 	schemaBytes, err := json.Marshal(definition.InputSchema)
 	if err != nil {
 		panic(err)
@@ -78,9 +79,9 @@ func addRunTool(server *mcp.Server, options Options) {
 		result := &mcp.CallToolResult{StructuredContent: json.RawMessage(data), Content: []mcp.Content{&mcp.TextContent{Text: string(data)}}}
 		switch value := output.(type) {
 		case mapping.Result:
-			result.IsError = value.Error != nil
+			result.IsError = value.Error != nil || value.LintError != nil
 		case *mapping.Result:
-			result.IsError = value != nil && value.Error != nil
+			result.IsError = value != nil && (value.Error != nil || value.LintError != nil)
 		}
 		return result, nil
 	})
