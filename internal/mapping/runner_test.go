@@ -23,6 +23,7 @@ func TestRunMessageSemantics(t *testing.T) {
 		{name: "bytes", source: `root = "hello".bytes()`, input: `{}`, output: `"hello"`},
 		{name: "payload JSON", source: `root = "{\"value\":42}"`, input: `{}`, output: `{"value":42}`},
 		{name: "large integer", source: `root = this`, input: `9223372036854775807`, output: `9223372036854775807`},
+		{name: "numeric operation", source: `root = this.value + 2`, input: `{"value":40}`, output: `42`},
 		{name: "root mutation", source: "root.seen = this.value\nroot.original = root.keep", input: `{"value":42}`, root: `{"keep":"yes"}`, output: `{"keep":"yes","seen":42,"original":"yes"}`},
 		{name: "explicit null root", source: `root = root`, input: `{"value":42}`, root: `null`, output: `null`},
 		{name: "metadata", source: "meta copied = @original\nmeta original = deleted()\nroot = this", input: `{}`, output: `{}`, metadata: map[string]any{"original": "x"}},
@@ -48,6 +49,13 @@ func TestRunBinaryOutput(t *testing.T) {
 	result := Run(Request{Source: `root = "/w==".decode("base64")`, Input: json.RawMessage(`null`)})
 	require.Nil(t, result.Error, "%+v", result.Error)
 	assert.Equal(t, &RawOutput{Encoding: "base64", Data: "/w=="}, result.RawOutput)
+}
+
+func TestRunBoundsMapRecursion(t *testing.T) {
+	result := Run(Request{Source: "map recurse { root = this.apply(\"recurse\") }\nroot = this.apply(\"recurse\")", Input: json.RawMessage(`null`)})
+	require.NotNil(t, result.Error)
+	assert.Equal(t, "execute", result.Error.Kind)
+	assert.Contains(t, result.Error.Message, "recursion")
 }
 
 func TestRunEnvironmentAndImports(t *testing.T) {
