@@ -109,8 +109,13 @@ func (h *Handler) lintFindingsWithConfig(uri protocol.DocumentURI, text string, 
 		if setting.Severity == "off" {
 			return
 		}
-		row := int(n.StartPosition().Row)
-		if row > 0 {
+		// A suppression belongs to the following syntax node, including its
+		// descendants. Wrapping that node must not re-enable its diagnostics.
+		for target := n; target != nil && target.Kind() != "source"; target = target.Parent() {
+			row := int(target.StartPosition().Row)
+			if row == 0 {
+				continue
+			}
 			previous := strings.TrimSpace(lines[row-1])
 			if strings.HasPrefix(previous, "# bloblang-lint-disable-next-line ") {
 				ids := strings.SplitN(strings.TrimPrefix(previous, "# bloblang-lint-disable-next-line "), " -- ", 2)[0]
@@ -365,15 +370,21 @@ func (h *Handler) CodeAction(_ context.Context, p *protocol.CodeActionParams) ([
 				continue
 			}
 			rr := f.diagnostic.Range
+			edit := protocol.TextEdit{Range: rr, NewText: f.replacement}
 			if r != nil {
 				rr = r.hostRange(text, rr)
+				var valid bool
+				edit, valid = r.sourceEdit(text, f.diagnostic.Range, f.replacement)
+				if !valid {
+					continue
+				}
 			}
 			if rr.End.Line < p.Range.Start.Line || rr.Start.Line > p.Range.End.Line {
 				continue
 			}
 			d := f.diagnostic
 			d.Range = rr
-			out = append(out, protocol.CodeAction{Title: d.Message, Kind: &kind, Diagnostics: []protocol.Diagnostic{d}, Edit: &protocol.WorkspaceEdit{Changes: map[protocol.DocumentURI][]protocol.TextEdit{uri: {{Range: rr, NewText: f.replacement}}}}})
+			out = append(out, protocol.CodeAction{Title: d.Message, Kind: &kind, Diagnostics: []protocol.Diagnostic{d}, Edit: &protocol.WorkspaceEdit{Changes: map[protocol.DocumentURI][]protocol.TextEdit{uri: {edit}}}})
 		}
 	}
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
