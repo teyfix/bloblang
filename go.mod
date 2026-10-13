@@ -4,8 +4,10 @@ go 1.26.3
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.10.3
+	github.com/bombsimon/jtd-infer-go v1.0.1
 	github.com/denormal/go-gitignore v0.0.0-20180930084346-ae8ad1d07817
 	github.com/dustin/go-humanize v1.0.1
+	github.com/jsontypedef/json-typedef-go v0.0.0-20200503043955-4280071bd745
 	github.com/owenrumney/go-lsp v0.2.5
 	github.com/redpanda-data/benthos/v4 v4.73.0
 	github.com/redpanda-data/connect/v4 v4.92.0
