@@ -203,7 +203,7 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 		}
 		walkNodes(n, func(ch *tree_sitter.Node) {
 			if ch.Kind() == "string" {
-				path := strings.Trim(ch.Utf8Text([]byte(text)), "\"`")
+				path := decodeImportPath(ch.Utf8Text([]byte(text)))
 				abs := h.resolveImportPath(uri, path)
 				imports = append(imports, abs)
 				if ch.StartByte() <= offset && offset <= ch.EndByte() {
@@ -253,7 +253,7 @@ func (h *Handler) definitionForText(uri protocol.DocumentURI, text string, posit
 					for i := uint(0); i < n.ChildCount(); i++ {
 						c := n.Child(i)
 						if c.Kind() == "string" {
-							next = append(next, h.resolveImportPath(fileURI(path), strings.Trim(c.Utf8Text([]byte(txt)), "\"`")))
+							next = append(next, h.resolveImportPath(fileURI(path), decodeImportPath(c.Utf8Text([]byte(txt)))))
 						}
 					}
 				}
@@ -451,7 +451,7 @@ func (h *Handler) fileReferences(target protocol.DocumentURI) []protocol.Locatio
 			for i := uint(0); i < n.NamedChildCount(); i++ {
 				arg := n.NamedChild(i)
 				if arg.Kind() == "string" {
-					name := strings.Trim(arg.Utf8Text([]byte(text)), "\"`")
+					name := decodeImportPath(arg.Utf8Text([]byte(text)))
 					if fileURI(h.resolveImportPath(uri, name)) == target {
 						out = append(out, nodeLocation(uri, text, arg))
 					}

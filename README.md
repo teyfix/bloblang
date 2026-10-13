@@ -157,6 +157,8 @@ The server implements full document sync, completion, hover, formatting, definit
 
 Each document uses the nearest ancestor `.bloblangrc.json`. In the editor, lookup stops at the deepest containing workspace root; loose documents and the CLI stop at the nearest Git project root, or the filesystem root outside Git. A nested configuration replaces ancestor settings. Edits, creation and deletion take effect without restarting. Invalid settings fall back to defaults in the editor, and the bundled VS Code schema reports invalid keys or values; CLI commands report invalid settings with exit status `2`.
 
+The repository's [`.bloblangrc.json`](.bloblangrc.json) shows the current defaults and links to the bundled schema for configuration completion. An empty `lint.rules` object keeps each rule's default severity.
+
 ```json
 {
   "formatter": { "printWidth": 80 },

@@ -309,3 +309,23 @@ func TestEditorAbsoluteImportParity(t *testing.T) {
 	require.Len(t, locations, 1)
 	require.Equal(t, fileURI(importPath), locations[0].URI)
 }
+
+func TestEditorEscapedImportPaths(t *testing.T) {
+	h, uri := featureHandler(t)
+	t.Cleanup(func() { h.parser.Close("") })
+	for _, tc := range []struct{ literal, path string }{
+		{`"C:\\Users\\developer\\shared.blobl"`, `C:\Users\developer\shared.blobl`},
+		{`"\\\\server\\share\\shared.blobl"`, `\\server\share\shared.blobl`},
+		{`"shared\u0020mapping.blobl"`, "shared mapping.blobl"},
+		{`"shared\\mapping.blobl"`, `shared\mapping.blobl`},
+	} {
+		t.Run(tc.literal, func(t *testing.T) {
+			require.Equal(t, tc.path, decodeImportPath(tc.literal))
+			text := "import " + tc.literal + "\nroot = this\n"
+			locations, err := h.definitionForText(uri, text, protocol.Position{Line: 0, Character: 10})
+			require.NoError(t, err)
+			require.Len(t, locations, 1)
+			require.Equal(t, fileURI(h.resolveImportPath(uri, tc.path)), locations[0].URI)
+		})
+	}
+}

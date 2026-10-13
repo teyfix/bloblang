@@ -182,10 +182,7 @@ func (h *Handler) importHintDiagnostics(uri protocol.DocumentURI, text string) [
 				if pathStr == "" {
 					continue
 				}
-				pathStr = strings.Trim(pathStr, "\"`")
-				if strings.HasPrefix(pathStr, `"""`) && strings.HasSuffix(pathStr, `"""`) {
-					pathStr = pathStr[3 : len(pathStr)-3]
-				}
+				pathStr = decodeImportPath(pathStr)
 				resolved := h.resolveImportPath(uri, pathStr)
 				row := int(child.StartPosition().Row)
 				diagnostics = append(diagnostics, protocol.Diagnostic{

@@ -1,9 +1,0 @@
-# Bloblang LSP configuration
-bloblang_docs_url: https://docs.redpanda.com/redpanda-connect/guides/bloblang
-log_level: info
-diagnostics_debounce: 200ms
-inline_result_debounce: 100ms
-max_inline_document_bytes: 150000
-max_inline_result_bytes: 100
-partial_exec_cache_size: 1000
-partial_exec_cache_ttl: 5m

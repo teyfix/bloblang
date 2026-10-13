@@ -178,7 +178,7 @@ func expandPaths(paths []string, noIgnore bool) ([]discoveredTarget, error) {
 		if _, err := os.Lstat(absolute); err == nil {
 			expanded = append(expanded, discoveredTarget{path: absolute})
 			continue
-		} else if !errors.Is(err, os.ErrNotExist) || !strings.ContainsAny(argument, "*?[{") {
+		} else if !globLookupMiss(err) || !strings.ContainsAny(argument, "*?[{") {
 			return nil, err
 		}
 		pattern := filepath.ToSlash(absolute)

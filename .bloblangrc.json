@@ -1,0 +1,17 @@
+{
+  "$schema": "./schemas/bloblangrc.schema.json",
+  "formatter": {
+    "printWidth": 80
+  },
+  "preview": {
+    "format": "yaml"
+  },
+  "lint": {
+    "enabled": true,
+    "rules": {}
+  },
+  "files": {
+    "exclude": [],
+    "respectGitignore": true
+  }
+}

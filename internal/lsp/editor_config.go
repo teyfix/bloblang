@@ -1,9 +1,24 @@
 package lsp
 
 import (
+	"strconv"
+	"strings"
+
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
 )
+
+// Import AST nodes retain quoted source spelling. Match Benthos's string
+// decoding before resolving paths, especially escaped Windows separators.
+func decodeImportPath(literal string) string {
+	if len(literal) >= 6 && strings.HasPrefix(literal, `"""`) && strings.HasSuffix(literal, `"""`) {
+		return literal[3 : len(literal)-3]
+	}
+	if path, err := strconv.Unquote(literal); err == nil {
+		return path
+	}
+	return strings.Trim(literal, "\"`")
+}
 
 func (h *Handler) sourceContext(uri protocol.DocumentURI) editorconfig.SourceContext {
 	roots := append([]string(nil), h.workspaceRoots...)
