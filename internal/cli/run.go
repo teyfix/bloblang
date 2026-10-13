@@ -248,11 +248,25 @@ func decodeMappingObject(raw string, target any) error {
 }
 
 func readMappingFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: expected a regular file", path)
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: expected a regular file", path)
+	}
 	data, err := readMappingData(file)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
