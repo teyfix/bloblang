@@ -43,6 +43,8 @@ File-watch notifications reload samples for open documents, including file creat
 
 ## Environment fixtures
 
+Sample files must be regular files no larger than 4 MiB. The same limit applies to sibling samples and all file-backed sample directives.
+
 IDE validation and execution replace `env(name)` in a private Benthos environment. Whole-sample `env` overrides take precedence; unspecified names return an empty string. Neither path reads or mutates the server's process environment. Imported mappings and dynamic environment names use the same resolver.
 
 ```bloblang
