@@ -111,7 +111,7 @@ func TestMissingEnvConcatenationValidationAndHover(t *testing.T) {
 	v = hoverAt(t, h, uri, text, `), "ref="`)
 	require.NotNil(t, v)
 	require.Contains(t, v.Contents.Value(), `""`)
-	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}})
+	hints, err := h.InlayHint(context.Background(), &protocol.InlayHintParams{TextDocument: protocol.TextDocumentIdentifier{URI: uri}, Range: protocol.Range{End: protocol.Position{Line: 10000}}})
 	require.NoError(t, err)
 	require.NotEmpty(t, hints)
 	require.Contains(t, string(hints[len(hints)-1].Label), "email=")

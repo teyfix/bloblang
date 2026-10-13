@@ -29,30 +29,42 @@ func shortValue(val interface{}, maxBytes int) string {
 
 func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParams) ([]protocol.InlayHint, error) {
 	uri := params.TextDocument.URI
+	ctx, version, text, sample, done, ok := h.requestDocument(ctx, uri)
+	defer done()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []protocol.InlayHint{}, nil
+	}
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
-		host, _ := h.documents.Text(uri)
+		host := text
 		out := []protocol.InlayHint{}
-		for _, r := range h.regions(uri) {
+		for _, r := range extractRegions(uri, host) {
+			localRange, intersects := regionRequestRange(r, host, params.Range)
+			if !intersects {
+				continue
+			}
 			cp := *params
 			cp.TextDocument.URI = r.uri
-			cp.Range = protocol.Range{Start: protocol.Position{}, End: bytePosition(r.text, len(r.text))}
+			cp.Range = localRange
 			vals, err := h.InlayHint(ctx, &cp)
 			if err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
 				continue
 			}
 			for _, v := range vals {
 				v.Position = r.hostPosition(host, v.Position)
-				out = append(out, v)
+				if positionInRange(v.Position, params.Range) {
+					out = append(out, v)
+				}
 			}
 		}
 		return out, nil
 	}
-	sample := h.getSample(uri)
 	if sample == nil {
-		return []protocol.InlayHint{}, nil
-	}
-	text, ok := h.documents.Text(uri)
-	if !ok {
 		return []protocol.InlayHint{}, nil
 	}
 
@@ -70,6 +82,9 @@ func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParam
 
 	// 1. Traverse direct children of root to find sample comment nodes
 	for i := uint(0); i < root.ChildCount(); i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		child := root.Child(i)
 		if child.Kind() != "comment" {
 			// A non-comment node means we reached statements; no sample comments allowed after statements
@@ -78,6 +93,9 @@ func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParam
 		commentText := child.Utf8Text([]byte(text))
 		lineText := strings.TrimSpace(commentText)
 		if strings.HasPrefix(lineText, "#!sample ") || strings.HasPrefix(lineText, "#!sample_from ") {
+			if !positionInRange(bytePosition(text, int(child.EndByte())), params.Range) {
+				continue
+			}
 			shortVal := shortValue(sample.Value, h.config.MaxInlineResultBytes)
 			hints = append(hints, protocol.InlayHint{
 				Position: protocol.Position{
@@ -95,6 +113,9 @@ func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParam
 
 	// 2. Traverse statements to generate before-assignment and after-assignment inlay hints
 	for i := uint(0); i < root.ChildCount(); i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		child := root.Child(i)
 		if child.Kind() != "root_assignment" && child.Kind() != "if_statement" {
 			continue
@@ -105,24 +126,32 @@ func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParam
 		// A. Before-Assignment Inlay Hint (at the end of "root" keyword)
 		if child.Kind() == "root_assignment" && child.ChildCount() > 0 {
 			rootToken := child.Child(0)
-			resultBefore, errBefore := h.executor.ExecuteThrough(h.parser, string(uri), sample, text, child.StartByte())
-			if errBefore == nil && resultBefore != nil {
-				hints = append(hints, protocol.InlayHint{
-					Position: protocol.Position{
-						Line:      int(rootToken.EndPosition().Row),
-						Character: int(rootToken.EndPosition().Column),
-					},
-					Label: rawJSON(": " + resultBefore.Text),
-					Tooltip: &protocol.MarkupContent{
-						Kind:  protocol.Markdown,
-						Value: h.previewMarkdown(uri, resultBefore.Full),
-					},
-				})
+			if positionInRange(bytePosition(text, int(rootToken.EndByte())), params.Range) {
+				resultBefore, errBefore := h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, child.StartByte())
+				if errBefore == nil && resultBefore != nil {
+					hints = append(hints, protocol.InlayHint{
+						Position: protocol.Position{
+							Line:      int(rootToken.EndPosition().Row),
+							Character: int(rootToken.EndPosition().Column),
+						},
+						Label: rawJSON(": " + resultBefore.Text),
+						Tooltip: &protocol.MarkupContent{
+							Kind:  protocol.Markdown,
+							Value: h.previewMarkdown(uri, resultBefore.Full),
+						},
+					})
+				}
 			}
 		}
 
 		// B. After-Assignment Inlay Hint (at the end of statement node)
-		resultAfter, errAfter := h.executor.ExecuteThrough(h.parser, string(uri), sample, text, child.EndByte())
+		if !positionInRange(bytePosition(text, int(child.EndByte())), params.Range) {
+			continue
+		}
+		resultAfter, errAfter := h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, child.EndByte())
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if errAfter != nil {
 			execErrs = append(execErrs, protocol.Diagnostic{
 				Range: protocol.Range{
@@ -157,7 +186,10 @@ func (h *Handler) InlayHint(ctx context.Context, params *protocol.InlayHintParam
 	for i := range execErrs {
 		execErrs[i].Range = rangeUTF16(text, execErrs[i].Range)
 	}
-	h.publishExecDiagnostics(ctx, uri, execErrs)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	h.publishExecDiagnosticsVersion(ctx, uri, execErrs, version, params.Range)
 	return hints, nil
 }
 

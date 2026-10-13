@@ -8,6 +8,30 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
+func TestParserDocumentCleanupAndPermanentClose(t *testing.T) {
+	b, err := NewBloblang()
+	require.NoError(t, err)
+	defer b.Close()
+	for _, key := range []string{"file:///test.blobl", "file:///test.blobl:completion", "file:///test.blobl#bloblang-0:lint", "file:///other.blobl"} {
+		tree, err := b.Parse(key, "root = this")
+		require.NoError(t, err)
+		tree.Close()
+	}
+	b.InvalidateDocument("file:///test.blobl")
+	require.Len(t, b.trees, 1)
+	require.Contains(t, b.trees, "file:///other.blobl")
+	b.Clear()
+	require.Empty(t, b.trees)
+	tree, err := b.Parse("file:///next.blobl", "root = this")
+	require.NoError(t, err)
+	defer tree.Close()
+	b.Close()
+	b.Close()
+	require.Nil(t, b.parser)
+	_, err = b.Parse("file:///next.blobl", "root = this")
+	require.ErrorContains(t, err, "closed")
+}
+
 func TestBloblangParserCaching(t *testing.T) {
 	b, err := NewBloblang()
 	require.NoError(t, err)

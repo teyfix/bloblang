@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -52,9 +53,13 @@ type Handler struct {
 	execDiagnostics   map[protocol.DocumentURI][]protocol.Diagnostic
 	execDiagnosticsMu sync.RWMutex
 
-	latestVersion map[protocol.DocumentURI]uint64
-	refreshInlays bool
-	refreshLenses bool
+	latestVersion    map[protocol.DocumentURI]uint64
+	nextVersion      uint64
+	documentContexts map[protocol.DocumentURI]context.Context
+	documentCancels  map[protocol.DocumentURI]context.CancelFunc
+	stopped          bool
+	refreshInlays    bool
+	refreshLenses    bool
 }
 
 // NewHandler defaults its advertised version to dev when build metadata is absent.
@@ -74,7 +79,7 @@ func NewHandler(cfg *config.Config, logger *slog.Logger, buildVersion ...string)
 		version = buildVersion[0]
 	}
 
-	return &Handler{
+	h := &Handler{
 		config:            cfg,
 		logger:            logger,
 		serverVersion:     version,
@@ -91,7 +96,13 @@ func NewHandler(cfg *config.Config, logger *slog.Logger, buildVersion ...string)
 		lastDiagnostics:   make(map[protocol.DocumentURI][]protocol.Diagnostic),
 		execDiagnostics:   make(map[protocol.DocumentURI][]protocol.Diagnostic),
 		latestVersion:     make(map[protocol.DocumentURI]uint64),
-	}, nil
+		documentContexts:  make(map[protocol.DocumentURI]context.Context),
+		documentCancels:   make(map[protocol.DocumentURI]context.CancelFunc),
+	}
+	executor.SetImporter(func(uri, name string) ([]byte, error) {
+		return os.ReadFile(h.resolveImportPath(protocol.DocumentURI(uri), name))
+	})
+	return h, nil
 }
 
 func (h *Handler) SetClient(client *server.Client) {
@@ -146,6 +157,17 @@ func (h *Handler) Initialize(_ context.Context, params *protocol.InitializeParam
 }
 
 func (h *Handler) Shutdown(_ context.Context) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.stopped = true
+	for uri, cancel := range h.documentCancels {
+		cancel()
+		h.executor.InvalidateDocument(string(uri))
+	}
+	clear(h.documentCancels)
+	clear(h.documentContexts)
+	clear(h.latestVersion)
+	h.parser.Close()
 	return nil
 }
 
@@ -154,11 +176,17 @@ func (h *Handler) SetTrace(_ context.Context, _ *protocol.SetTraceParams) error 
 }
 
 func (h *Handler) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.stopped {
+		return errors.New("language server is shut down")
+	}
 	doc, err := h.documents.Open(params)
 	if err != nil {
 		return err
 	}
 	uri := params.TextDocument.URI
+	validation, ver := h.beginDocumentVersion(uri)
 	baseDir := h.baseDirForURI(uri)
 	h.importBasesMu.Lock()
 	h.importBaseDirs[uri] = baseDir
@@ -171,21 +199,22 @@ func (h *Handler) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocum
 	h.executor.InvalidateDocument(string(uri))
 	h.clearExecDiagnostics(uri)
 
-	h.mu.Lock()
-	h.latestVersion[uri]++
-	ver := h.latestVersion[uri]
-	h.mu.Unlock()
-
-	go func(v uint64) { h.validateDocument(context.Background(), uri, v); h.scheduleRefresh(uri) }(ver)
+	h.scheduleValidation(validation, uri, ver)
 	return nil
 }
 
 func (h *Handler) DidChange(ctx context.Context, params *protocol.DidChangeTextDocumentParams) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.stopped {
+		return errors.New("language server is shut down")
+	}
 	doc, err := h.documents.Change(params)
 	if err != nil {
 		return err
 	}
 	uri := params.TextDocument.URI
+	validation, ver := h.beginDocumentVersion(uri)
 	if yamlDocument(uri) {
 		h.syncRegions(uri, doc.Text())
 	} else {
@@ -194,17 +223,20 @@ func (h *Handler) DidChange(ctx context.Context, params *protocol.DidChangeTextD
 	h.executor.InvalidateDocument(string(uri))
 	h.clearExecDiagnostics(uri)
 
-	h.mu.Lock()
-	h.latestVersion[uri]++
-	ver := h.latestVersion[uri]
-	h.mu.Unlock()
-
-	go func(v uint64) { h.validateDocument(context.Background(), uri, v); h.scheduleRefresh(uri) }(ver)
+	h.scheduleValidation(validation, uri, ver)
 	return nil
 }
 
 func (h *Handler) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	uri := params.TextDocument.URI
+	if cancel := h.documentCancels[uri]; cancel != nil {
+		cancel()
+	}
+	delete(h.documentCancels, uri)
+	delete(h.documentContexts, uri)
+	delete(h.latestVersion, uri)
 	h.clearRegions(uri)
 	h.documents.Close(params)
 	h.importBasesMu.Lock()
@@ -217,17 +249,21 @@ func (h *Handler) DidClose(ctx context.Context, params *protocol.DidCloseTextDoc
 	delete(h.sampleDiagnostics, uri)
 	h.sampleDiagnosticsMu.Unlock()
 	h.executor.InvalidateDocument(string(uri))
-
-	h.mu.Lock()
-	h.latestVersion[uri]++
-	delete(h.latestVersion, uri)
-	h.mu.Unlock()
-
-	go h.publishDiagnostics(context.Background(), uri, nil)
+	h.parser.InvalidateDocument(string(uri))
+	h.clearExecDiagnostics(uri)
+	h.publishDiagnostics(ctx, uri, nil)
+	h.lastDiagnosticsMu.Lock()
+	delete(h.lastDiagnostics, uri)
+	h.lastDiagnosticsMu.Unlock()
 	return nil
 }
 
 func (h *Handler) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	ctx, _, text, sample, done, ok := h.requestDocument(ctx, params.TextDocument.URI)
+	defer done()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if yamlDocument(params.TextDocument.URI) && !strings.Contains(string(params.TextDocument.URI), "#bloblang-") {
 		r, pos, ok := h.regionAt(params.TextDocument.URI, params.Position)
 		if !ok {
@@ -239,24 +275,37 @@ func (h *Handler) Completion(ctx context.Context, params *protocol.CompletionPar
 		return h.Completion(ctx, &cp)
 	}
 	items := h.completionItems
-	if text, ok := h.documents.Text(params.TextDocument.URI); ok {
+	if ok {
 		lines := strings.Split(text, "\n")
 		pos := byteColumn(text, params.Position)
 		switch getCompletionContext(lines, pos.Line, pos.Character) {
 		case "method":
 			items = filterCompletions(items, protocol.CompletionItemKindMethod)
-			items = h.methodCompletion(params.TextDocument.URI, text, params.Position, items)
+			items = h.methodCompletion(ctx, params.TextDocument.URI, sample, text, params.Position, items)
 		case "function":
 			items = filterCompletions(items, protocol.CompletionItemKindFunction)
 		case "variable":
 			items = h.variableCompletions(params.TextDocument.URI, text, params.Position)
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return &protocol.CompletionList{Items: items}, nil
 }
 
 func (h *Handler) Hover(ctx context.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
 	uri := params.TextDocument.URI
+	ctx, _, text, sample, done, ok := h.requestDocument(ctx, uri)
+	defer done()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if ctx.Err() != nil {
+			hover, err = nil, ctx.Err()
+		}
+	}()
 	if yamlDocument(uri) && !strings.Contains(string(uri), "#bloblang-") {
 		r, pos, ok := h.regionAt(uri, params.Position)
 		if !ok {
@@ -272,7 +321,6 @@ func (h *Handler) Hover(ctx context.Context, params *protocol.HoverParams) (hove
 		}
 		return v, err
 	}
-	text, ok := h.documents.Text(uri)
 	if !ok {
 		return nil, nil
 	}
@@ -324,7 +372,7 @@ func (h *Handler) Hover(ctx context.Context, params *protocol.HoverParams) (hove
 		return nil, nil
 	}
 
-	if sample := h.getSample(uri); sample != nil {
+	if sample != nil {
 		statement := node
 		for statement != nil && !benthosStatement(statement.Kind()) {
 			statement = statement.Parent()
@@ -334,9 +382,9 @@ func (h *Handler) Hover(ctx context.Context, params *protocol.HoverParams) (hove
 			var err error
 			if node.Kind() == "root" && node.Parent() != nil && node.Parent().Kind() == "root_assignment" {
 				if statement.Parent().Kind() == "source" {
-					result, err = h.executor.ExecuteThrough(h.parser, string(uri), sample, text, statement.StartByte())
+					result, err = h.executor.ExecuteThroughContext(ctx, h.parser, string(uri), sample, text, statement.StartByte())
 				} else {
-					result, err = h.executor.EvaluateExpression(h.parser, string(uri), sample, text, statement, node)
+					result, err = h.executor.EvaluateExpressionContext(ctx, h.parser, string(uri), sample, text, statement, node)
 				}
 			} else {
 				expression := hoverExpression(node)
@@ -344,7 +392,7 @@ func (h *Handler) Hover(ctx context.Context, params *protocol.HoverParams) (hove
 					expression = node.Parent().ChildByFieldName("value")
 				}
 				if expression != nil {
-					result, err = h.executor.EvaluateExpression(h.parser, string(uri), sample, text, statement, expression)
+					result, err = h.executor.EvaluateExpressionContext(ctx, h.parser, string(uri), sample, text, statement, expression)
 				}
 			}
 			if err == nil && result != nil {
@@ -460,7 +508,11 @@ func (h *Handler) sampleDiagnosticsFor(uri protocol.DocumentURI) []protocol.Diag
 // Called on DidOpen/DidChange so stale errors don't persist after the document is edited.
 func (h *Handler) clearExecDiagnostics(uri protocol.DocumentURI) {
 	h.execDiagnosticsMu.Lock()
-	delete(h.execDiagnostics, uri)
+	for key := range h.execDiagnostics {
+		if benthos.DocumentKeyMatches(string(key), string(uri)) {
+			delete(h.execDiagnostics, key)
+		}
+	}
 	h.execDiagnosticsMu.Unlock()
 }
 
@@ -489,11 +541,9 @@ func (h *Handler) publishExecDiagnostics(ctx context.Context, uri protocol.Docum
 	if h.client == nil || strings.Contains(string(uri), "#bloblang-") {
 		return
 	}
-	go func() {
-		if err := h.client.PublishDiagnostics(context.Background(), &protocol.PublishDiagnosticsParams{URI: uri, Diagnostics: merged}); err != nil {
-			h.logger.Debug("publish diagnostics failed", "uri", uri, "err", err)
-		}
-	}()
+	if err := h.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{URI: uri, Diagnostics: merged}); err != nil {
+		h.logger.Debug("publish diagnostics failed", "uri", uri, "err", err)
+	}
 }
 
 func sampleDirectiveLine(text string) int {
