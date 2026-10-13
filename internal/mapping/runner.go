@@ -29,6 +29,9 @@ type Request struct {
 	MappingPath string            `json:"mappingPath,omitempty"`
 	InputPath   string            `json:"inputPath,omitempty"`
 	SamplePath  string            `json:"samplePath,omitempty"`
+	// Origin preserves the absolute mapping path for host-side diagnostics.
+	// It is deliberately excluded from the isolated worker request.
+	Origin string `json:"-"`
 }
 
 // Error identifies the failing stage. Parser positions, when present, are

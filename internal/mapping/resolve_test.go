@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,11 +32,127 @@ func TestResolveMappingAndLargeInputFiles(t *testing.T) {
 	assert.Empty(t, req.MappingPath)
 	assert.Empty(t, req.InputPath)
 	assert.Empty(t, req.SamplePath)
+	assert.Equal(t, mapping, req.Origin)
+	serialized, err := json.Marshal(req)
+	require.NoError(t, err)
+	assert.NotContains(t, string(serialized), mapping)
 	result := Run(req)
 	require.Nil(t, result.Error)
 	encoded, err := json.Marshal(result.Output)
 	require.NoError(t, err)
 	assert.JSONEq(t, input, string(encoded))
+}
+
+func TestResolveSnapshotsTransitiveImports(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o700))
+	main := writeResolveFile(t, dir, "main.blobl", "import \"sub/a.blobl\"\nroot = this.apply(\"a\")")
+	a := "import \"../b.blobl\"\nmap a { root = this.apply(\"b\") }"
+	b := `map b { root = this.uppercase() }`
+	writeResolveFile(t, dir, "sub/a.blobl", a)
+	writeResolveFile(t, dir, "b.blobl", b)
+	req, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`"hello"`)})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"sub/a.blobl": a, "b.blobl": b}, req.Imports)
+	// Execution must use the snapshot after all source files disappear and cwd
+	// changes, since the isolated worker has no filesystem importer.
+	require.NoError(t, os.Remove(filepath.Join(dir, "sub/a.blobl")))
+	require.NoError(t, os.Remove(filepath.Join(dir, "b.blobl")))
+	t.Chdir(t.TempDir())
+	result := Run(req)
+	require.Nil(t, result.Error, "%+v", result.Error)
+	assert.Equal(t, "HELLO", result.Output)
+}
+
+func TestResolveExplicitImportsOverrideFiles(t *testing.T) {
+	dir := t.TempDir()
+	main := writeResolveFile(t, dir, "main.blobl", "import \"helper.blobl\"\nroot = this.apply(\"helper\")")
+	writeResolveFile(t, dir, "helper.blobl", `map helper { root = "filesystem" }`)
+	imports := map[string]string{"helper.blobl": `map helper { root = "fixture" }`}
+	req, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`), Imports: imports})
+	require.NoError(t, err)
+	result := Run(req)
+	require.Nil(t, result.Error)
+	assert.Equal(t, "fixture", result.Output)
+	req.Imports["helper.blobl"] = "modified"
+	assert.Equal(t, `map helper { root = "fixture" }`, imports["helper.blobl"])
+}
+
+func TestResolveImportsErrorsAndLimits(t *testing.T) {
+	dir := t.TempDir()
+	main := writeResolveFile(t, dir, "main.blobl", "import \"missing.blobl\"\nroot = this")
+	_, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`)})
+	require.ErrorContains(t, err, `import "missing.blobl"`)
+
+	main = writeResolveFile(t, dir, "main.blobl", "import \"a.blobl\"\nroot = this")
+	writeResolveFile(t, dir, "a.blobl", "import \"b.blobl\"\nmap a { root = this }")
+	writeResolveFile(t, dir, "b.blobl", "import \"a.blobl\"\nmap b { root = this }")
+	_, err = Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`)})
+	require.ErrorContains(t, err, "possible import cycle")
+
+	large := "#" + strings.Repeat("x", MaxRequestBytes/2) + "\n"
+	main = writeResolveFile(t, dir, "main.blobl", "import \"a.blobl\"\nimport \"b.blobl\"\nroot = this")
+	writeResolveFile(t, dir, "a.blobl", large+"map a { root = this }")
+	writeResolveFile(t, dir, "b.blobl", large+"map b { root = this }")
+	_, err = Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`)})
+	require.ErrorContains(t, err, "exceeds")
+}
+
+func TestResolveDefersParseErrorsAndDisablesConstructors(t *testing.T) {
+	dir := t.TempDir()
+	for _, source := range []string{
+		"root = (",
+		`root = file("/this-file-must-not-be-read-by-the-resolver")`,
+	} {
+		main := writeResolveFile(t, dir, "main.blobl", source)
+		req, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`)})
+		require.NoError(t, err)
+		result := Run(req)
+		require.NotNil(t, result.Error)
+		assert.Equal(t, "parse", result.Error.Kind)
+	}
+}
+
+func TestResolveImportSnapshotDoesNotInvokeConstructors(t *testing.T) {
+	constructors := 0
+	err := bloblang.RegisterFunctionV2("mapping_runner_import_probe", bloblang.NewPluginSpec().Impure(), func(*bloblang.ParsedParams) (bloblang.Function, error) {
+		constructors++
+		return func() (any, error) { return "unexpected", nil }, nil
+	})
+	require.NoError(t, err)
+	dir := t.TempDir()
+	main := writeResolveFile(t, dir, "main.blobl", "import \"helper.blobl\"\nroot = this.apply(\"helper\")")
+	writeResolveFile(t, dir, "helper.blobl", "root = mapping_runner_import_probe()\nmap helper { root = mapping_runner_import_probe() }")
+	req, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`null`)})
+	require.NoError(t, err)
+	assert.Zero(t, constructors)
+	result := Run(req)
+	require.NotNil(t, result.Error)
+	assert.Equal(t, "parse", result.Error.Kind)
+	assert.Zero(t, constructors)
+}
+
+func TestResolveInlineSourceDoesNotReadImports(t *testing.T) {
+	path := writeResolveFile(t, t.TempDir(), "helper.blobl", `map helper { root = "filesystem" }`)
+	name, err := json.Marshal(path)
+	require.NoError(t, err)
+	req, err := Resolve(Request{Source: "import " + string(name) + "\nroot = this.apply(\"helper\")", Input: json.RawMessage(`null`)})
+	require.NoError(t, err)
+	assert.Empty(t, req.Imports)
+	result := Run(req)
+	require.NotNil(t, result.Error)
+	assert.Contains(t, result.Error.Message, "was not supplied")
+}
+
+func TestResolveDirectMappingImport(t *testing.T) {
+	dir := t.TempDir()
+	main := writeResolveFile(t, dir, "main.blobl", `from "target.blobl"`)
+	writeResolveFile(t, dir, "target.blobl", `root = this.uppercase()`)
+	req, err := Resolve(Request{MappingPath: main, Input: json.RawMessage(`"hello"`)})
+	require.NoError(t, err)
+	result := Run(req)
+	require.Nil(t, result.Error, "%+v", result.Error)
+	assert.Equal(t, "HELLO", result.Output)
 }
 
 func TestResolveInputYAML(t *testing.T) {
