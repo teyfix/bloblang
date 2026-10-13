@@ -118,7 +118,7 @@ func (h *Handler) publishExecDiagnosticsVersion(ctx context.Context, uri protoco
 		}
 		h.execDiagnosticsMu.RUnlock()
 	}
-	h.publishExecDiagnostics(ctx, uri, diagnostics)
+	h.publishExecDiagnostics(ctx, uri, diagnostics, version)
 }
 
 func positionBefore(a, b protocol.Position) bool {

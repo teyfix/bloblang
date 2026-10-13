@@ -58,6 +58,7 @@ type Handler struct {
 	documentContexts map[protocol.DocumentURI]context.Context
 	documentCancels  map[protocol.DocumentURI]context.CancelFunc
 	stopped          bool
+	diagnosticOutbox diagnosticOutbox
 	refreshInlays    bool
 	refreshLenses    bool
 }
@@ -167,6 +168,7 @@ func (h *Handler) Shutdown(_ context.Context) error {
 	clear(h.documentCancels)
 	clear(h.documentContexts)
 	clear(h.latestVersion)
+	h.diagnosticOutbox.stop()
 	h.parser.Close()
 	return nil
 }
@@ -251,7 +253,7 @@ func (h *Handler) DidClose(ctx context.Context, params *protocol.DidCloseTextDoc
 	h.executor.InvalidateDocument(string(uri))
 	h.parser.InvalidateDocument(string(uri))
 	h.clearExecDiagnostics(uri)
-	h.publishDiagnostics(ctx, uri, nil)
+	h.publishDiagnostics(ctx, uri, nil, 0)
 	h.lastDiagnosticsMu.Lock()
 	delete(h.lastDiagnostics, uri)
 	h.lastDiagnosticsMu.Unlock()
@@ -519,7 +521,7 @@ func (h *Handler) clearExecDiagnostics(uri protocol.DocumentURI) {
 // publishExecDiagnostics stores the given execution-time diagnostics for uri and
 // re-publishes the merged set (last known parse/import diagnostics + exec diagnostics).
 // Passing an empty or nil slice clears any previously stored exec diagnostics.
-func (h *Handler) publishExecDiagnostics(ctx context.Context, uri protocol.DocumentURI, diags []protocol.Diagnostic) {
+func (h *Handler) publishExecDiagnostics(ctx context.Context, uri protocol.DocumentURI, diags []protocol.Diagnostic, generation ...uint64) {
 	h.execDiagnosticsMu.Lock()
 	if len(diags) == 0 {
 		delete(h.execDiagnostics, uri)
@@ -541,9 +543,7 @@ func (h *Handler) publishExecDiagnostics(ctx context.Context, uri protocol.Docum
 	if h.client == nil || strings.Contains(string(uri), "#bloblang-") {
 		return
 	}
-	if err := h.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{URI: uri, Diagnostics: merged}); err != nil {
-		h.logger.Debug("publish diagnostics failed", "uri", uri, "err", err)
-	}
+	h.enqueueDiagnostics(uri, merged, generation...)
 }
 
 func sampleDirectiveLine(text string) int {
