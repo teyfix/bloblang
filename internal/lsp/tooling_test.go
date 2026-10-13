@@ -11,7 +11,7 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 )
 
 func testTooling(t *testing.T) (*Tooling, string) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 )
 
 func fixtureIndex(docs ...Documentation) *Index {

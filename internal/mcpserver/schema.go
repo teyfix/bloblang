@@ -1,8 +1,8 @@
 package mcpserver
 
 import (
-	"github.com/teyfix/bloblang-lsp/internal/help"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/help"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 func object(properties map[string]any) map[string]any {

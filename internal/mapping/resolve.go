@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/benthos"
+	"github.com/teyfix/bloblang/internal/fileuri"
 	"go.yaml.in/yaml/v3"
 )
 

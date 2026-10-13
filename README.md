@@ -11,6 +11,8 @@ blobl mcp
 
 The [MCP server](docs/mcp.md) supports file-based evaluation, linting, formatting, sample schemas and batched documentation search with per-result match evidence. Search is lexical and fuzzy; it does not require an embedding model. [Schema summaries](docs/features/schema.md) use the existing Go `jtd-infer-go` library and JSON Type Definition, with enums disabled. See [evaluation and fixtures](docs/features/evaluation.md) for execution semantics and limits.
 
+The repository and Go module are now `github.com/teyfix/bloblang`, reflecting the CLI, MCP and editor tools. Existing `blobl` and legacy server binary names, LSP command IDs, configuration paths and `BLOBLANG_LSP_*` variables remain compatible. Update Git remotes and download URLs to this repository; see [migration](docs/migration.md).
+
 ![Typing a Bloblang mapping in VS Code with live highlighting and completion](docs/demos/typing.gif)
 
 ## Try it in VS Code
@@ -114,7 +116,7 @@ Migration from the old sample syntax: change `#!sample {"name":"Ada"}` to `#!inp
 
 ## Command line
 
-Download a `blobl-v<version>-<os>-<arch>` archive from [Releases](https://github.com/teyfix/bloblang-lsp/releases), extract `blobl` (`blobl.exe` on Windows), and put it on your `PATH`.
+Download a `blobl-v<version>-<os>-<arch>` archive from [Releases](https://github.com/teyfix/bloblang/releases), extract `blobl` (`blobl.exe` on Windows), and put it on your `PATH`.
 
 ```sh
 blobl fmt mapping.blobl              # formatted source on stdout
@@ -143,7 +145,7 @@ go build -a -o target/bloblang-lsp ./cmd/bloblang-lsp
 
 To develop against the sibling grammar, use `go mod edit -replace github.com/teyfix/tree-sitter-bloblang=../tree-sitter-bloblang` locally and remove that replacement before committing. Use `-a` after regenerating its grammar: the included `parser.c` lives outside the Go package directory and Go's normal package cache can miss the change.
 
-Tagged releases publish `blobl-<os>-<arch>` binaries (`.exe` on Windows) and `blobl-v<version>-<os>-<arch>` tar/ZIP archives for Linux, macOS and Windows on amd64 and arm64. CLI archives contain `blobl` or `blobl.exe`. The public [release manifest](https://github.com/teyfix/bloblang-lsp/releases/latest/download/blobl-release.json) supplies the stable release tag and its six raw binary filenames; installers download the selected asset from that exact tag without GitHub API access or authentication.
+Tagged releases publish `blobl-<os>-<arch>` binaries (`.exe` on Windows) and `blobl-v<version>-<os>-<arch>` tar/ZIP archives for Linux, macOS and Windows on amd64 and arm64. CLI archives contain `blobl` or `blobl.exe`. The public [release manifest](https://github.com/teyfix/bloblang/releases/latest/download/blobl-release.json) supplies the stable release tag and its six raw binary filenames; installers download the selected asset from that exact tag without GitHub API access or authentication.
 
 Releases retain separate `bloblang-lsp-<os>-<arch>` binaries and `language-server-v<version>-<os>-<arch>` archives for older clients, plus the existing `SHA256SUMS` file covering binaries, archives and the manifest. Legacy server executables start LSP without a subcommand; `blobl` requires `lsp` to start the server. In VS Code, a custom `bloblang.server.path` pointing to `blobl` requires `bloblang.server.args: ["lsp"]`; a legacy server uses the default empty arguments.
 

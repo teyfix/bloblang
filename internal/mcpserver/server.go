@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
-	"github.com/teyfix/bloblang-lsp/internal/help"
-	"github.com/teyfix/bloblang-lsp/internal/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/benthos"
+	"github.com/teyfix/bloblang/internal/help"
+	"github.com/teyfix/bloblang/internal/lsp"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 // Options supplies the shared evaluator. Run must honor the context deadline

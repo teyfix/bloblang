@@ -14,8 +14,8 @@ import (
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/benthos"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 	"go.yaml.in/yaml/v3"
 )
 

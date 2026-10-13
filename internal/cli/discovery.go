@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	gitignore "github.com/denormal/go-gitignore"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 )
 
 type directorySettings struct {

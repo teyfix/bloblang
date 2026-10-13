@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/teyfix/bloblang-lsp/internal/help"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
-	"github.com/teyfix/bloblang-lsp/internal/schema"
+	"github.com/teyfix/bloblang/internal/help"
+	"github.com/teyfix/bloblang/internal/mapping"
+	"github.com/teyfix/bloblang/internal/schema"
 )
 
 func connect(t *testing.T, options Options) *mcp.ClientSession {

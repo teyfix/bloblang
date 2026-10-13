@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang/internal/config"
 )
 
 func TestNewLogger(t *testing.T) {

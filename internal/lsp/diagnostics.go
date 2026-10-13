@@ -9,8 +9,8 @@ import (
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/benthos"
+	"github.com/teyfix/bloblang/internal/fileuri"
 )
 
 func (h *Handler) validateDocument(ctx context.Context, uri protocol.DocumentURI, version uint64) {

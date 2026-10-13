@@ -4,7 +4,7 @@ import (
 	"context"
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"sort"
 	"strings"

@@ -11,7 +11,7 @@ import (
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang/internal/config"
 )
 
 func featureHandler(t *testing.T) (*Handler, protocol.DocumentURI) {

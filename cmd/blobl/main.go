@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/teyfix/bloblang-lsp/internal/cli"
+	"github.com/teyfix/bloblang/internal/cli"
 )
 
 var Version = "dev"

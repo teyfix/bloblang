@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 )
 
 // Import AST nodes retain quoted source spelling. Match Benthos's string

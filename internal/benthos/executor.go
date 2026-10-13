@@ -10,8 +10,8 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/teyfix/bloblang-lsp/internal/config"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/config"
+	"github.com/teyfix/bloblang/internal/fileuri"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 

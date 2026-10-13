@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 func useDirectMappingRunner(t *testing.T) {

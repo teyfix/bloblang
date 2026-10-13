@@ -10,7 +10,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	pretty "github.com/teyfix/bloblang-lsp/internal/tidwall"
+	pretty "github.com/teyfix/bloblang/internal/tidwall"
 	"go.yaml.in/yaml/v3"
 )
 

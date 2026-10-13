@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 )
 
 type inputFile struct {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 // Use the SDK's low-level handler for evaluation: the generic adapter applies

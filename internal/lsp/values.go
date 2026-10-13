@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 

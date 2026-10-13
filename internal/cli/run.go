@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/teyfix/bloblang-lsp/internal/evaluation"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/evaluation"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 // Kept injectable for command tests; production always uses the subprocess

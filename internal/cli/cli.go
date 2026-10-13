@@ -15,11 +15,11 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/teyfix/bloblang-lsp/internal/config"
-	"github.com/teyfix/bloblang-lsp/internal/evaluation"
-	"github.com/teyfix/bloblang-lsp/internal/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
-	"github.com/teyfix/bloblang-lsp/internal/mcpserver"
+	"github.com/teyfix/bloblang/internal/config"
+	"github.com/teyfix/bloblang/internal/evaluation"
+	"github.com/teyfix/bloblang/internal/lsp"
+	"github.com/teyfix/bloblang/internal/mapping"
+	"github.com/teyfix/bloblang/internal/mcpserver"
 )
 
 type BuildInfo struct {

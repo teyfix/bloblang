@@ -14,7 +14,7 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/owenrumney/go-lsp/servertest"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/schema"
+	"github.com/teyfix/bloblang/internal/schema"
 	"go.yaml.in/yaml/v3"
 )
 

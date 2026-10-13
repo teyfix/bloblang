@@ -6,7 +6,7 @@ import (
 	"time"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 )
 
 func hostDocumentURI(uri protocol.DocumentURI) protocol.DocumentURI {

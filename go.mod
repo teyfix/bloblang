@@ -1,4 +1,4 @@
-module github.com/teyfix/bloblang-lsp
+module github.com/teyfix/bloblang
 
 go 1.26.3
 

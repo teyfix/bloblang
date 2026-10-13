@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/help"
+	"github.com/teyfix/bloblang/internal/help"
 )
 
 func TestBinaryMCPStdio(t *testing.T) {

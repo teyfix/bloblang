@@ -7,7 +7,7 @@ import (
 	"os"
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/schema"
+	"github.com/teyfix/bloblang/internal/schema"
 )
 
 func executeCommandNames() []string {

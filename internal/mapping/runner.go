@@ -12,7 +12,7 @@ import (
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
 	"github.com/redpanda-data/benthos/v4/public/service"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 )
 
 // Request contains everything a mapping can read. Input is required: JSON null

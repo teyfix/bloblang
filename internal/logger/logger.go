@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang/internal/config"
 )
 
 func NewLogger(cfg *config.Config) *slog.Logger {

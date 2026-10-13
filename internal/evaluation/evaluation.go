@@ -3,8 +3,8 @@ package evaluation
 
 import (
 	"context"
-	"github.com/teyfix/bloblang-lsp/internal/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/lsp"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 // Run resolves files and sample directives, lints in the source file's project

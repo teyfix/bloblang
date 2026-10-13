@@ -3,7 +3,7 @@ package lsp
 import (
 	"fmt"
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
+	"github.com/teyfix/bloblang/internal/benthos"
 	"path/filepath"
 	"strings"
 )

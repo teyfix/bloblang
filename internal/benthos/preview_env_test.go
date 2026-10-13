@@ -2,7 +2,7 @@ package benthos
 
 import (
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/fileuri"
 	"os"
 	"path/filepath"
 	"testing"

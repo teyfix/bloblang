@@ -3,7 +3,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 	"os"
 )
 

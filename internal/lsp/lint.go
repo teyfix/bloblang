@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/editorconfig"
+	"github.com/teyfix/bloblang/internal/editorconfig"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"go.yaml.in/yaml/v3"

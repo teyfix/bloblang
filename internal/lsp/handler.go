@@ -14,8 +14,8 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/owenrumney/go-lsp/server"
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
-	"github.com/teyfix/bloblang-lsp/internal/benthos"
-	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang/internal/benthos"
+	"github.com/teyfix/bloblang/internal/config"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 

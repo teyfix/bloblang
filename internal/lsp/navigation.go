@@ -3,7 +3,7 @@ package lsp
 import (
 	"context"
 	protocol "github.com/owenrumney/go-lsp/lsp"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/fileuri"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	"sort"
 	"strings"

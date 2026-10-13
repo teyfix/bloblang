@@ -11,8 +11,8 @@ import (
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/fileuri"
-	"github.com/teyfix/bloblang-lsp/internal/testutil"
+	"github.com/teyfix/bloblang/internal/fileuri"
+	"github.com/teyfix/bloblang/internal/testutil"
 )
 
 func TestIntegrationMethodCompletion(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/config"
+	"github.com/teyfix/bloblang/internal/config"
 )
 
 func testExecutorConfig() *config.Config {

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
+	"github.com/teyfix/bloblang/internal/mapping"
 )
 
 func direct(_ context.Context, req mapping.Request) mapping.Result { return mapping.Run(req) }

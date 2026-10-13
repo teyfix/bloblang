@@ -6,11 +6,11 @@ See [run and test](features/evaluation.md), [schema](features/schema.md), and [M
 
 ## Installation
 
-Download a `blobl-v<version>-<os>-<arch>.tar.gz` archive from [Releases](https://github.com/teyfix/bloblang-lsp/releases), or `.zip` on Windows. Supported OS values are `linux`, `darwin` and `windows`; architectures are `amd64` and `arm64`. Extract `blobl` (`blobl.exe` on Windows) into a directory on your `PATH`. The binary runs without a Go toolchain or C compiler.
+Download a `blobl-v<version>-<os>-<arch>.tar.gz` archive from [Releases](https://github.com/teyfix/bloblang/releases), or `.zip` on Windows. Supported OS values are `linux`, `darwin` and `windows`; architectures are `amd64` and `arm64`. Extract `blobl` (`blobl.exe` on Windows) into a directory on your `PATH`. The binary runs without a Go toolchain or C compiler.
 
 The [VS Code extension](https://github.com/teyfix/vscode-bloblang) installs the managed CLI on startup and exposes it to new integrated terminals when `bloblang.cli.enabled` is enabled (the default). Existing terminals may need relaunching. **Bloblang: Check for Tool Updates** checks immediately. **Bloblang: Install CLI for External Terminals** copies an independent binary into a folder you choose, initially `~/.local/bin` on Unix or `%LOCALAPPDATA%/Bloblang/bin` on Windows. Add that folder to your shell's `PATH` if needed; the command does not edit shell profiles. In remote workspaces these operations run on the remote extension host. A custom `bloblang.server.path` skips automatic managed CLI installation and terminal exposure; the explicit external installation command remains available.
 
-Automated installers can fetch [blobl-release.json](https://github.com/teyfix/bloblang-lsp/releases/latest/download/blobl-release.json). Its `schemaVersion` is `1`, `version` is a stable tag such as `v0.3.0`, and `assets` maps `<os>-<arch>` to raw binary filenames such as `blobl-linux-amd64` or `blobl-windows-arm64.exe`. Download binaries from `https://github.com/teyfix/bloblang-lsp/releases/download/<version>/<asset>`. The manifest and binaries are public and require no GitHub API requests or authentication.
+Automated installers can fetch [blobl-release.json](https://github.com/teyfix/bloblang/releases/latest/download/blobl-release.json). Its `schemaVersion` is `1`, `version` is a stable tag such as `v0.3.0`, and `assets` maps `<os>-<arch>` to raw binary filenames such as `blobl-linux-amd64` or `blobl-windows-arm64.exe`. Download binaries from `https://github.com/teyfix/bloblang/releases/download/<version>/<asset>`. The manifest and binaries are public and require no GitHub API requests or authentication.
 
 ## Formatting
 

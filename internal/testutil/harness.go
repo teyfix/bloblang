@@ -9,8 +9,8 @@ import (
 
 	protocol "github.com/owenrumney/go-lsp/lsp"
 	"github.com/owenrumney/go-lsp/servertest"
-	"github.com/teyfix/bloblang-lsp/internal/config"
-	lsppkg "github.com/teyfix/bloblang-lsp/internal/lsp"
+	"github.com/teyfix/bloblang/internal/config"
+	lsppkg "github.com/teyfix/bloblang/internal/lsp"
 )
 
 type Harness struct {

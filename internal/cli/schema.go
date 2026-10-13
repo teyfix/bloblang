@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/teyfix/bloblang-lsp/internal/mapping"
-	"github.com/teyfix/bloblang-lsp/internal/schema"
+	"github.com/teyfix/bloblang/internal/mapping"
+	"github.com/teyfix/bloblang/internal/schema"
 	"go.yaml.in/yaml/v3"
 )
 
