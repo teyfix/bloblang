@@ -7,6 +7,24 @@ import (
 	"testing"
 )
 
+func TestToolingPortableImportNames(t *testing.T) {
+	tooling, err := NewToolingWithImports(map[string]string{
+		"sub/a.blobl": "import \"../b.blobl\"\nmap a { root = this.apply(\"b\") }",
+		"b.blobl":     "map b { root = this.uppercase() }",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tooling.Close()
+	result, err := tooling.Lint(filepath.Join(t.TempDir(), "main.blobl"), "import \"sub/a.blobl\"\nroot = this.apply(\"a\")", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %+v", result.Diagnostics)
+	}
+}
+
 func TestToolingImportLimits(t *testing.T) {
 	dir := t.TempDir()
 	for _, test := range []struct {

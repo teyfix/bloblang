@@ -132,6 +132,9 @@ func (t *Tooling) environment(uri protocol.DocumentURI) *bloblang.Environment {
 		if t.imports != nil {
 			text, ok := t.imports[name]
 			if !ok {
+				text, ok = t.imports[filepath.ToSlash(name)]
+			}
+			if !ok {
 				return nil, fmt.Errorf("import %q was not supplied in imports", name)
 			}
 			data = []byte(text)

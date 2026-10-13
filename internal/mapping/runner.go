@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"unicode/utf8"
 
 	"github.com/redpanda-data/benthos/v4/public/bloblang"
@@ -118,6 +119,9 @@ func Run(req Request) Result {
 	meta, _ := metaValue.(map[string]any)
 	env := benthos.NewEnvironment().OnlyPure().WithoutFunctions("env").WithMaxMapRecursion(100).WithCustomImporter(func(name string) ([]byte, error) {
 		source, ok := req.Imports[name]
+		if !ok {
+			source, ok = req.Imports[filepath.ToSlash(name)]
+		}
 		if !ok {
 			return nil, fmt.Errorf("import %q was not supplied in imports", name)
 		}

@@ -45,6 +45,19 @@ func TestRunMessageSemantics(t *testing.T) {
 	}
 }
 
+func TestRunPortableImportNames(t *testing.T) {
+	result := Run(Request{
+		Source: "import \"sub/a.blobl\"\nroot = this.apply(\"a\")",
+		Input:  json.RawMessage(`"hello"`),
+		Imports: map[string]string{
+			"sub/a.blobl": "import \"../b.blobl\"\nmap a { root = this.apply(\"b\") }",
+			"b.blobl":     "map b { root = this.uppercase() }",
+		},
+	})
+	require.Nil(t, result.Error)
+	require.Equal(t, "HELLO", result.Output)
+}
+
 func TestRunBinaryOutput(t *testing.T) {
 	result := Run(Request{Source: `root = "/w==".decode("base64")`, Input: json.RawMessage(`null`)})
 	require.Nil(t, result.Error, "%+v", result.Error)

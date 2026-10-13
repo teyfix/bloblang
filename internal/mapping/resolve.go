@@ -152,6 +152,9 @@ func snapshotImports(req *Request, baseDir string) error {
 		if source, ok := imports[name]; ok {
 			return []byte(source), nil
 		}
+		if source, ok := imports[filepath.ToSlash(name)]; ok {
+			return []byte(source), nil
+		}
 		path := name
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(baseDir, path)
@@ -168,7 +171,8 @@ func snapshotImports(req *Request, baseDir string) error {
 			importErr = fmt.Errorf("mapping request including imports exceeds %d bytes", MaxRequestBytes)
 			return nil, importErr
 		}
-		imports[name] = string(data)
+		// Store portable names; Benthos's callback uses native separators.
+		imports[filepath.ToSlash(name)] = string(data)
 		return data, nil
 	})
 	// Syntax/type errors belong to evaluation diagnostics. Only file loading
