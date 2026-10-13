@@ -64,6 +64,37 @@ func TestResolveSnapshotsTransitiveImports(t *testing.T) {
 	assert.Equal(t, "HELLO", result.Output)
 }
 
+func TestSnapshotImportsForStaticTools(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "virtual.blobl")
+	source := "import \"helper.blobl\"\nroot = this.apply(\"helper\")"
+	helper := `map helper { root = this.uppercase() }`
+	writeResolveFile(t, dir, "helper.blobl", helper)
+	imports, err := SnapshotImports(source, path, nil)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"helper.blobl": helper}, imports)
+	imports, err = SnapshotImports(source, "", nil)
+	require.NoError(t, err)
+	assert.Empty(t, imports)
+	supplied := map[string]string{"helper.blobl": "fixture"}
+	imports, err = SnapshotImports(source, "", supplied)
+	require.NoError(t, err)
+	imports["helper.blobl"] = "mutated"
+	assert.Equal(t, "fixture", supplied["helper.blobl"])
+	_, err = SnapshotImports(strings.Repeat("x", MaxRequestBytes), "", nil)
+	require.ErrorContains(t, err, "exceeds")
+}
+
+func TestResolveRejectsNonregularFiles(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Resolve(Request{MappingPath: dir, Input: json.RawMessage(`null`)})
+	require.ErrorContains(t, err, "not a regular file")
+	_, err = Resolve(Request{Source: "root = this", InputPath: dir})
+	require.ErrorContains(t, err, "not a regular file")
+	_, err = SnapshotImports(`import "."`, filepath.Join(dir, "main.blobl"), nil)
+	require.ErrorContains(t, err, "not a regular file")
+}
+
 func TestResolveExplicitImportsOverrideFiles(t *testing.T) {
 	dir := t.TempDir()
 	main := writeResolveFile(t, dir, "main.blobl", "import \"helper.blobl\"\nroot = this.apply(\"helper\")")
