@@ -87,7 +87,13 @@ func TestExecutionCacheBoundsAndCancellation(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, int64(3), calls.Load(), "evicted results must be evaluated again")
-	executor.config.PartialExecCacheTTL = time.Nanosecond
+	// Expire the entry explicitly: Windows' monotonic clock can report zero
+	// elapsed time between adjacent calls, even with a one-nanosecond TTL.
+	executor.cache.mu.Lock()
+	for _, element := range executor.cache.entries {
+		element.Value.(*executionEntry).created = time.Now().Add(-executor.config.PartialExecCacheTTL - time.Second)
+	}
+	executor.cache.mu.Unlock()
 	_, err := executor.execute("file:///mapping.blobl", sample, "root = cache_tick()")
 	require.NoError(t, err)
 	require.Equal(t, int64(4), calls.Load(), "expired results must be evaluated again")
