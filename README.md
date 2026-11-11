@@ -2,7 +2,7 @@
 
 Bloblang tooling for standalone mappings and mappings embedded in Redpanda Connect YAML. The `blobl` CLI provides `lsp`, `lint` and `fmt` commands using the same analysis and formatting as the language server. Diagnostics, completion, hover previews and navigation are available to LSP clients. The [VS Code extension](https://github.com/teyfix/vscode-bloblang) supplies editor integration and highlighting, installs the latest `blobl` release, and uses it for the language server and integrated terminal commands.
 
-![Typing a Bloblang mapping in VS Code with live highlighting and completion](docs/demos/typing.gif)
+![Typing a Bloblang mapping in VS Code with live highlighting and completion](docs/demos/typing.webp)
 
 ## Try it in VS Code
 
@@ -16,7 +16,7 @@ The demos below show the server in action through the VS Code extension. Each fo
 
 Highlighting, diagnostics, completion, hover and navigation work inside recognized YAML mapping values, including quoted scalars and literal/folded blocks. Run **Bloblang: Format Embedded Mappings** from the Command Palette to format those values while preserving surrounding YAML. Short scalars keep their style; values that wrap become literal blocks. Changed folded blocks also become literal blocks. `${! ... }` interpolations receive language features but are not formatted. Embedded server features require valid host YAML.
 
-![Bloblang highlighted inside quoted YAML mapping and check values in VS Code](docs/demos/yaml-highlighting.gif)
+![Bloblang highlighted inside quoted YAML mapping and check values in VS Code](docs/demos/yaml-highlighting.webp)
 
 ## Editor features
 
@@ -34,7 +34,7 @@ Each embedded mapping is evaluated independently. A sample describes that mappin
 
 Provide sample input to inspect values while editing, without running a pipeline. Hover `this`, assignment targets, variables and supported expressions; assignment end hints show output after each statement. In VS Code, **Show Input** and **Show Output** lenses open full previews for larger values.
 
-![Sampled input and output hover previews in VS Code](docs/demos/sample-hover.gif)
+![Sampled input and output hover previews in VS Code](docs/demos/sample-hover.webp)
 
 For `mapping.blobl`, the default is a sibling `mapping.sample.json`, `.yaml` or `.yml`. Files must have a `$bloblang` envelope:
 
@@ -195,7 +195,7 @@ root = this.cast.
   join("; ")
 ```
 
-![Formatting a Bloblang object in VS Code to fit the configured print width](docs/demos/formatting.gif)
+![Formatting a Bloblang object in VS Code to fit the configured print width](docs/demos/formatting.webp)
 
 Hover values, inlay tooltips and Show Output share YAML previews by default. Set `preview.format` to `json` for compact JSON. Both use `formatter.printWidth`; inline labels have their own size limit. An unset `env()` is null, so `.catch(...)` alone does not satisfy the environment rule. Use `.or(default)`, `.or(throw("required"))`, or `.not_null().catch(throw("required"))`.
 
@@ -205,7 +205,7 @@ Large hover and inlay tooltip previews are capped at 4 KiB / 60 lines, with limi
 
 Lint suggestions account for object merge/replacement, missing fields and effectful evaluation. Grouped assignments, projections, deletion and existence checks are advisory. Consecutive `.without()` calls with literal arguments have an explicit Quick Fix. The server does not implement `source.fixAll`; formatting does not apply lint refactors. See [lint behavior and fixes](docs/features/lint.md).
 
-![A Bloblang lint diagnostic and its explicit Quick Fix in VS Code](docs/demos/lint-quick-fix.gif)
+![A Bloblang lint diagnostic and its explicit Quick Fix in VS Code](docs/demos/lint-quick-fix.webp)
 
 ```bloblang
 # bloblang-lint-disable-next-line correctness/environment/require-fallback -- optional value
